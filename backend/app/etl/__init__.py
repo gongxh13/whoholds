@@ -1,10 +1,15 @@
-"""ETL placeholder.
+"""ETL package.
 
-PR 7 lands real fetchers:
-- etl/pull_top10.py       — AKShare top-10 shareholders (季报 quarterly)
-- etl/pull_prices.py      — AKShare daily K-line
-- etl/pull_teamwork.py    — Eastmoney shareholder-cooperation export
+Modules:
+- pull_top10:     stock_gdfx_top_10_em / stock_gdfx_free_top_10_em → holdings.db
+- pull_prices:    stock_zh_a_hist_tx (Tencent source!) → prices.db
+- pull_teamwork:  stock_gdfx_holding_teamwork_em → entities.db (raw teamwork rows)
+- ingest_teamwork: explode teamwork rows into holder_companies + coholder_pairs
+- pull_wikidata:  Wikidata SPARQL for known individual shareholders → wd_cache.db
+- disambiguate:   Layer 2 algorithm — rebuild entity + appearance_entity
+- bootstrap:      orchestrate the Day-0 full pull
 
-PR 8 lands the disambiguation pipeline (`etl/disambiguate.py`).
-PR 9 wires APScheduler into the FastAPI process.
+ETL deps (akshare, pandas) are an *optional* extras install — see pyproject
+[project.optional-dependencies].etl. Importing this package does NOT import
+akshare; each ETL module imports lazily.
 """

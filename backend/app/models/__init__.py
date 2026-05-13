@@ -1,3 +1,4 @@
+from app.models.annotation import AnnotationOp, AnnotationRequest, AnnotationResponse
 from app.models.common import ConfidenceLevel, DataSource
 from app.models.company import CompanyDetail, StackSeriesPoint, Top10Row
 from app.models.discover import CoholderPair, CrossHolder
@@ -16,6 +17,9 @@ from app.models.person import (
 from app.models.search import SearchCompany, SearchPerson, SearchResponse
 
 __all__ = [
+    "AnnotationOp",
+    "AnnotationRequest",
+    "AnnotationResponse",
     "BucketMeta",
     "BucketSummary",
     "CoholderPair",

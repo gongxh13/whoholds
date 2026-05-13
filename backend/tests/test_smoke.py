@@ -31,6 +31,7 @@ def test_openapi_has_all_routes() -> None:
         "/api/network",
         "/api/discover/top-cross-holders",
         "/api/discover/top-coholder-pairs",
+        "/api/annotation",
     }
     missing = expected - paths
     assert not missing, f"missing routes: {missing}"

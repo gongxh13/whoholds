@@ -10,26 +10,55 @@ router = APIRouter(tags=["search"])
 
 @router.get("/search", response_model=SearchResponse)
 def search(q: str = Query(..., min_length=1)) -> SearchResponse:
+    """Search across both holdings (top10) and entities (holder_companies).
+
+    Companies hit either source (holdings has detailed timeline, holder_companies
+    has whole-market teamwork coverage). People come from holder_companies only,
+    since that's where we have the cleaner is_person='个人' filter.
+    """
     like = f"%{q}%"
-    people: list[SearchPerson] = []
     companies: list[SearchCompany] = []
+    seen_codes: set[str] = set()
 
     try:
         with connect("holdings") as conn:
-            rows = conn.execute(
+            for r in conn.execute(
                 """
-                SELECT DISTINCT stock_code, stock_name
-                FROM top10_holders
-                WHERE stock_code LIKE ? OR stock_name LIKE ?
+                SELECT DISTINCT stock_code, stock_name FROM top10_holders
+                WHERE stock_name LIKE ? OR stock_code LIKE ?
                 LIMIT 20
                 """,
                 (like, like),
-            ).fetchall()
-            companies = [SearchCompany(stock_code=r["stock_code"], stock_name=r["stock_name"]) for r in rows]
+            ):
+                if r["stock_code"] in seen_codes:
+                    continue
+                seen_codes.add(r["stock_code"])
+                companies.append(
+                    SearchCompany(stock_code=r["stock_code"], stock_name=r["stock_name"])
+                )
     except Exception:
-        # DB not yet migrated or empty — return empty results rather than 500.
         pass
 
+    try:
+        with connect("entities") as conn:
+            for r in conn.execute(
+                """
+                SELECT DISTINCT stock_code, stock_name FROM holder_companies
+                WHERE stock_name LIKE ? OR stock_code LIKE ?
+                LIMIT 20
+                """,
+                (like, like),
+            ):
+                if r["stock_code"] in seen_codes:
+                    continue
+                seen_codes.add(r["stock_code"])
+                companies.append(
+                    SearchCompany(stock_code=r["stock_code"], stock_name=r["stock_name"])
+                )
+    except Exception:
+        pass
+
+    people: list[SearchPerson] = []
     try:
         with connect("entities") as conn:
             rows = conn.execute(
@@ -43,8 +72,10 @@ def search(q: str = Query(..., min_length=1)) -> SearchResponse:
                 """,
                 (like,),
             ).fetchall()
-            people = [SearchPerson(name=r["holder_name"], n_companies=r["n"]) for r in rows]
+            people = [
+                SearchPerson(name=r["holder_name"], n_companies=r["n"]) for r in rows
+            ]
     except Exception:
         pass
 
-    return SearchResponse(people=people, companies=companies)
+    return SearchResponse(people=people, companies=companies[:20])

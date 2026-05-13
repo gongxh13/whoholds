@@ -6,7 +6,7 @@ through PR 3–5 (UI migration) and PR 7–8 (ETL + disambiguation).
 """
 from fastapi import APIRouter
 
-from app.api import company, discover, health, network, person, search
+from app.api import annotation, company, discover, health, network, person, search
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
@@ -15,3 +15,4 @@ api_router.include_router(person.router)
 api_router.include_router(company.router)
 api_router.include_router(network.router)
 api_router.include_router(discover.router)
+api_router.include_router(annotation.router)

@@ -1,0 +1,38 @@
+# whoholds 反向代理 + basic auth + 静态前端
+# 用法：generate hash:  caddy hash-password
+# 然后把 WHOHOLDS_USER / WHOHOLDS_PASS_HASH 写到 .env，docker compose up -d。
+#
+# design.md §合规：basic auth 是访问层的硬要求，不要部署到公网无认证体系。
+
+{
+    auto_https off
+    admin off
+}
+
+:80 {
+    encode gzip
+
+    # API 反代给 backend 容器，basic auth 在外层
+    handle /api/* {
+        basicauth {
+            {$WHOHOLDS_USER} {$WHOHOLDS_PASS_HASH}
+        }
+        reverse_proxy backend:8000
+    }
+
+    # 前端静态资源也要 basic auth — 整合后个人身份不能展示给陌生人
+    handle {
+        basicauth {
+            {$WHOHOLDS_USER} {$WHOHOLDS_PASS_HASH}
+        }
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+
+    # Cloudflare / 反代日志（可选）
+    log {
+        output stdout
+        format console
+    }
+}

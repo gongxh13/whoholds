@@ -1,0 +1,1543 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "whoholds backend",
+    "description": "A-share top-10 shareholder network & timeline API.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search",
+        "description": "Search across both holdings (top10) and entities (holder_companies).\n\nCompanies hit either source (holdings has detailed timeline, holder_companies\nhas whole-market teamwork coverage). People come from holder_companies only,\nsince that's where we have the cleaner is_person='个人' filter.",
+        "operationId": "search_api_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/person/{name}": {
+      "get": {
+        "tags": [
+          "person"
+        ],
+        "summary": "Person Detail",
+        "operationId": "person_detail_api_person__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bucket"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/person/{name}/disambiguate": {
+      "get": {
+        "tags": [
+          "person"
+        ],
+        "summary": "Disambiguate",
+        "operationId": "disambiguate_api_person__name__disambiguate_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisambiguateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/company/{code}": {
+      "get": {
+        "tags": [
+          "company"
+        ],
+        "summary": "Company Detail",
+        "operationId": "company_detail_api_company__code__get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/network": {
+      "get": {
+        "tags": [
+          "network"
+        ],
+        "summary": "Network",
+        "operationId": "network_api_network_get",
+        "parameters": [
+          {
+            "name": "focus",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Focus"
+            }
+          },
+          {
+            "name": "hops",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Hops"
+            }
+          },
+          {
+            "name": "min_pct",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 0.0,
+              "title": "Min Pct"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/discover/top-cross-holders": {
+      "get": {
+        "tags": [
+          "discover"
+        ],
+        "summary": "Top Cross Holders",
+        "description": "High-frequency cross-company individual shareholders.\n\nSource: `holder_companies` (whole-market coverage from teamwork ETL).\n`total_value` is enriched from holdings × latest close when available.",
+        "operationId": "top_cross_holders_api_discover_top_cross_holders_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrossHolder"
+                  },
+                  "title": "Response Top Cross Holders Api Discover Top Cross Holders Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/discover/top-coholder-pairs": {
+      "get": {
+        "tags": [
+          "discover"
+        ],
+        "summary": "Top Coholder Pairs",
+        "operationId": "top_coholder_pairs_api_discover_top_coholder_pairs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "min_co",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "title": "Min Co"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CoholderPair"
+                  },
+                  "title": "Response Top Coholder Pairs Api Discover Top Coholder Pairs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/annotation": {
+      "post": {
+        "tags": [
+          "annotation"
+        ],
+        "summary": "Create Annotation",
+        "operationId": "create_annotation_api_annotation_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnotationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "annotation"
+        ],
+        "summary": "List Annotations",
+        "operationId": "list_annotations_api_annotation_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnnotationResponse"
+                  },
+                  "title": "Response List Annotations Api Annotation Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnnotationRequest": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "merge",
+              "split",
+              "bind_qid",
+              "is_person"
+            ],
+            "title": "Op"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "user": {
+            "type": "string",
+            "title": "User",
+            "default": "anonymous"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op",
+          "payload"
+        ],
+        "title": "AnnotationRequest"
+      },
+      "AnnotationResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "merge",
+              "split",
+              "bind_qid",
+              "is_person"
+            ],
+            "title": "Op"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "user": {
+            "type": "string",
+            "title": "User"
+          },
+          "ts": {
+            "type": "string",
+            "title": "Ts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "op",
+          "payload",
+          "user",
+          "ts"
+        ],
+        "title": "AnnotationResponse"
+      },
+      "BucketMeta": {
+        "properties": {
+          "bucket_idx": {
+            "type": "integer",
+            "title": "Bucket Idx"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "mid",
+              "low",
+              "single"
+            ],
+            "title": "Level"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "evidence": {
+            "type": "string",
+            "title": "Evidence"
+          },
+          "total_buckets": {
+            "type": "integer",
+            "title": "Total Buckets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bucket_idx",
+          "size",
+          "level",
+          "label",
+          "evidence",
+          "total_buckets"
+        ],
+        "title": "BucketMeta"
+      },
+      "BucketSummary": {
+        "properties": {
+          "bucket_idx": {
+            "type": "integer",
+            "title": "Bucket Idx"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "mid",
+              "low",
+              "single"
+            ],
+            "title": "Level"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "evidence": {
+            "type": "string",
+            "title": "Evidence"
+          },
+          "top_peers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Top Peers"
+          },
+          "companies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Companies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bucket_idx",
+          "size",
+          "level",
+          "label",
+          "evidence",
+          "top_peers",
+          "companies"
+        ],
+        "title": "BucketSummary"
+      },
+      "CoholderPair": {
+        "properties": {
+          "holder_a": {
+            "type": "string",
+            "title": "Holder A"
+          },
+          "holder_b": {
+            "type": "string",
+            "title": "Holder B"
+          },
+          "co_count": {
+            "type": "integer",
+            "title": "Co Count"
+          },
+          "company_list": {
+            "type": "string",
+            "title": "Company List"
+          }
+        },
+        "type": "object",
+        "required": [
+          "holder_a",
+          "holder_b",
+          "co_count",
+          "company_list"
+        ],
+        "title": "CoholderPair"
+      },
+      "CoholderSummary": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "co_count": {
+            "type": "integer",
+            "title": "Co Count"
+          },
+          "is_person": {
+            "type": "boolean",
+            "title": "Is Person"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "co_count",
+          "is_person"
+        ],
+        "title": "CoholderSummary"
+      },
+      "CompanyDetail": {
+        "properties": {
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code"
+          },
+          "stock_name": {
+            "type": "string",
+            "title": "Stock Name"
+          },
+          "available_dates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Available Dates"
+          },
+          "current_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Date"
+          },
+          "top10": {
+            "items": {
+              "$ref": "#/components/schemas/Top10Row"
+            },
+            "type": "array",
+            "title": "Top10"
+          },
+          "stack_series": {
+            "items": {
+              "$ref": "#/components/schemas/StackSeriesPoint"
+            },
+            "type": "array",
+            "title": "Stack Series"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stock_code",
+          "stock_name",
+          "available_dates",
+          "current_date",
+          "top10",
+          "stack_series"
+        ],
+        "title": "CompanyDetail"
+      },
+      "CompanyHolding": {
+        "properties": {
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code"
+          },
+          "stock_name": {
+            "type": "string",
+            "title": "Stock Name"
+          },
+          "report_date": {
+            "type": "string",
+            "title": "Report Date"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "holdings": {
+            "type": "integer",
+            "title": "Holdings"
+          },
+          "pct_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Total"
+          },
+          "pct_free": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Free"
+          },
+          "holdings_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings Value"
+          },
+          "source_table": {
+            "type": "string",
+            "title": "Source Table"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stock_code",
+          "stock_name",
+          "report_date",
+          "rank",
+          "holdings",
+          "source_table"
+        ],
+        "title": "CompanyHolding"
+      },
+      "CrossHolder": {
+        "properties": {
+          "holder_name": {
+            "type": "string",
+            "title": "Holder Name"
+          },
+          "n_companies": {
+            "type": "integer",
+            "title": "N Companies"
+          },
+          "companies": {
+            "items": {
+              "$ref": "#/components/schemas/CrossHolderCompany"
+            },
+            "type": "array",
+            "title": "Companies"
+          },
+          "total_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "holder_name",
+          "n_companies",
+          "companies"
+        ],
+        "title": "CrossHolder"
+      },
+      "CrossHolderCompany": {
+        "properties": {
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code"
+          },
+          "stock_name": {
+            "type": "string",
+            "title": "Stock Name"
+          },
+          "pct_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Total"
+          },
+          "holdings": {
+            "type": "integer",
+            "title": "Holdings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stock_code",
+          "stock_name",
+          "holdings"
+        ],
+        "title": "CrossHolderCompany"
+      },
+      "DisambiguateResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "total_companies": {
+            "type": "integer",
+            "title": "Total Companies"
+          },
+          "total_buckets": {
+            "type": "integer",
+            "title": "Total Buckets"
+          },
+          "multi_company_buckets": {
+            "type": "integer",
+            "title": "Multi Company Buckets"
+          },
+          "singletons": {
+            "type": "integer",
+            "title": "Singletons"
+          },
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/BucketSummary"
+            },
+            "type": "array",
+            "title": "Buckets"
+          },
+          "singletons_preview": {
+            "items": {
+              "$ref": "#/components/schemas/SingletonPreview"
+            },
+            "type": "array",
+            "title": "Singletons Preview"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "total_companies",
+          "total_buckets",
+          "multi_company_buckets",
+          "singletons",
+          "buckets",
+          "singletons_preview"
+        ],
+        "title": "DisambiguateResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "databases": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Databases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "databases"
+        ],
+        "title": "HealthResponse"
+      },
+      "NetworkEdge": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "weight",
+          "kind"
+        ],
+        "title": "NetworkEdge"
+      },
+      "NetworkNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "is_person": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Person"
+          },
+          "hop": {
+            "type": "integer",
+            "title": "Hop"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "hop"
+        ],
+        "title": "NetworkNode"
+      },
+      "NetworkResponse": {
+        "properties": {
+          "focus": {
+            "type": "string",
+            "title": "Focus"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkNode"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkEdge"
+            },
+            "type": "array",
+            "title": "Edges"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/NetworkStats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "focus",
+          "nodes",
+          "edges",
+          "stats"
+        ],
+        "title": "NetworkResponse"
+      },
+      "NetworkStats": {
+        "properties": {
+          "n_nodes": {
+            "type": "integer",
+            "title": "N Nodes"
+          },
+          "n_edges": {
+            "type": "integer",
+            "title": "N Edges"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n_nodes",
+          "n_edges",
+          "truncated"
+        ],
+        "title": "NetworkStats"
+      },
+      "PersonDetail": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "data_source": {
+            "type": "string",
+            "enum": [
+              "entity",
+              "raw_name",
+              "annotated"
+            ],
+            "title": "Data Source"
+          },
+          "bucket_meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BucketMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "wikidata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WikidataProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "companies": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyHolding"
+            },
+            "type": "array",
+            "title": "Companies"
+          },
+          "total_value_series": {
+            "items": {
+              "$ref": "#/components/schemas/TotalValuePoint"
+            },
+            "type": "array",
+            "title": "Total Value Series"
+          },
+          "coholders": {
+            "items": {
+              "$ref": "#/components/schemas/CoholderSummary"
+            },
+            "type": "array",
+            "title": "Coholders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "data_source",
+          "companies",
+          "total_value_series",
+          "coholders"
+        ],
+        "title": "PersonDetail"
+      },
+      "SearchCompany": {
+        "properties": {
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code"
+          },
+          "stock_name": {
+            "type": "string",
+            "title": "Stock Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stock_code",
+          "stock_name"
+        ],
+        "title": "SearchCompany"
+      },
+      "SearchPerson": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "n_companies": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Companies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "SearchPerson"
+      },
+      "SearchResponse": {
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/SearchPerson"
+            },
+            "type": "array",
+            "title": "People"
+          },
+          "companies": {
+            "items": {
+              "$ref": "#/components/schemas/SearchCompany"
+            },
+            "type": "array",
+            "title": "Companies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "people",
+          "companies"
+        ],
+        "title": "SearchResponse"
+      },
+      "SingletonPreview": {
+        "properties": {
+          "bucket_idx": {
+            "type": "integer",
+            "title": "Bucket Idx"
+          },
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code"
+          },
+          "stock_name": {
+            "type": "string",
+            "title": "Stock Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bucket_idx",
+          "stock_code",
+          "stock_name"
+        ],
+        "title": "SingletonPreview"
+      },
+      "StackSeriesPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "holder_name": {
+            "type": "string",
+            "title": "Holder Name"
+          },
+          "holdings": {
+            "type": "integer",
+            "title": "Holdings"
+          },
+          "holdings_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "holder_name",
+          "holdings"
+        ],
+        "title": "StackSeriesPoint"
+      },
+      "Top10Row": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "holder_name": {
+            "type": "string",
+            "title": "Holder Name"
+          },
+          "share_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Type"
+          },
+          "holdings": {
+            "type": "integer",
+            "title": "Holdings"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          },
+          "pct_field": {
+            "type": "string",
+            "title": "Pct Field"
+          },
+          "change_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Value"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "is_person": {
+            "type": "boolean",
+            "title": "Is Person"
+          },
+          "source_table": {
+            "type": "string",
+            "title": "Source Table"
+          },
+          "holdings_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "holder_name",
+          "holdings",
+          "pct_field",
+          "is_person",
+          "source_table"
+        ],
+        "title": "Top10Row"
+      },
+      "TotalValuePoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "value"
+        ],
+        "title": "TotalValuePoint"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WikidataProfile": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "qid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qid"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "birth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birth"
+          },
+          "occupations": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occupations"
+          },
+          "employer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employer"
+          },
+          "zh_wiki": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zh Wiki"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "WikidataProfile"
+      }
+    }
+  }
+}

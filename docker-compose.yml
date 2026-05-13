@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    image: whoholds-backend:latest
+    restart: unless-stopped
+    environment:
+      WHOHOLDS_DATA_DIR: /data
+      TZ: Asia/Shanghai
+    volumes:
+      - whoholds_data:/data
+    # 内部网络访问，不暴露端口
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    build:
+      context: ./frontend
+    image: whoholds-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      WHOHOLDS_USER: ${WHOHOLDS_USER:?set WHOHOLDS_USER}
+      WHOHOLDS_PASS_HASH: ${WHOHOLDS_PASS_HASH:?set WHOHOLDS_PASS_HASH (caddy hash-password)}
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  whoholds_data:
+  caddy_data:
+  caddy_config:
