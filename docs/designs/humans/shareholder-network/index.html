@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A 股股东关系网络与时间线分析 — 设计摘要</title>
+<style>
+  :root { --fg:#1a1a1a; --muted:#666; --line:#e3e3e3; --accent:#2563eb; --bg:#fff; --code:rgba(127,127,127,.16); }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e8e8e8; --muted:#9a9a9a; --line:#333; --accent:#6ea8fe; --bg:#161616; --code:rgba(255,255,255,.10); }
+  }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--fg); margin:0; padding:48px 20px;
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; }
+  main { max-width:760px; margin:0 auto; }
+  h1 { font-size:1.7rem; margin:0 0 .35em; line-height:1.25; }
+  h2 { font-size:.82rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+    margin:2.3em 0 .55em; }
+  h3 { font-size:1rem; margin:1.5em 0 .4em; font-weight:600; }
+  p { margin:.6em 0; }
+  .meta { color:var(--muted); font-size:.92rem; margin-bottom:1.6em; }
+  .badge { display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; padding:.18em .55em; border-radius:4px; vertical-align:middle; }
+  .badge.validated   { background:#dcfce7; color:#166534; }
+  .badge.implemented { background:#dbeafe; color:#1e40af; }
+  .badge.abandoned   { background:#fee2e2; color:#991b1b; }
+  @media (prefers-color-scheme: dark) {
+    .badge.validated   { background:#14532d; color:#bbf7d0; }
+    .badge.implemented { background:#1e3a8a; color:#bfdbfe; }
+    .badge.abandoned   { background:#7f1d1d; color:#fecaca; }
+  }
+  ul { padding-left:1.25em; margin:.5em 0; }
+  li { margin:.45em 0; }
+  a { color:var(--accent); }
+  code { background:var(--code); padding:.1em .35em; border-radius:3px; font-size:.9em; }
+  ol.howto { padding-left:1.4em; margin:.7em 0; }
+  ol.howto li { margin:.5em 0; }
+  figure.diagram { margin:1.5em 0; text-align:center; overflow-x:auto; }
+  figure.diagram svg { max-width:100%; height:auto; }
+  figure.diagram figcaption { color:var(--muted); font-size:.85rem; margin-top:.5em; }
+  .example { border-left:3px solid var(--accent); background:rgba(127,127,127,.07);
+    padding:.7em 1em; border-radius:0 6px 6px 0; margin:1.2em 0; }
+  .example .label { display:block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--muted); margin-bottom:.3em; }
+  .footer { margin-top:3em; padding-top:1.1em; border-top:1px solid var(--line);
+    color:var(--muted); font-size:.9rem; }
+  table { border-collapse:collapse; width:100%; font-size:.9rem; margin:.8em 0; }
+  th, td { text-align:left; padding:.45em .6em; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); text-transform:uppercase; font-size:.7rem; letter-spacing:.05em; }
+  .pill { display:inline-block; font-size:.72rem; padding:.1em .5em; border-radius:10px; font-weight:600; }
+  .pill.high { background:#dcfce7; color:#166534; }
+  .pill.mid  { background:#fef3c7; color:#854d0e; }
+  .pill.low  { background:#fed7aa; color:#9a3412; }
+  .pill.sgl  { background:#e5e7eb; color:#4b5563; }
+  @media (prefers-color-scheme: dark) {
+    .pill.high { background:#14532d; color:#bbf7d0; }
+    .pill.mid  { background:#713f12; color:#fde68a; }
+    .pill.low  { background:#7c2d12; color:#fed7aa; }
+    .pill.sgl  { background:#374151; color:#d1d5db; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>A 股股东关系网络与时间线分析 <span class="badge validated">validated</span></h1>
+  <div class="meta">
+    通过 9 个 spike 实验验证 · 2026-05-13 · 来自 <code>/spike</code> ·
+    详细版见 <a href="../../agents/shareholder-network/design.md">agent 设计文档</a>
+  </div>
+
+  <h2>这是什么</h2>
+  <p>一个本地 Web 应用，把 A 股上市公司"前十大股东"季报数据系统化：能<b>按人物</b>看一个自然人在哪些公司持股、跨公司持仓比例 / 市值时间线、谁是他常见合伙人；能<b>按公司</b>看 N 年股权结构变迁；能挖掘<b>家族 / 一致行动人</b>；能关联 <b>Wikidata 资料</b>。最关键的是验证了 <b>同名消歧算法</b> —— A 股股东重名严重（"吕强"在 111 家公司其实是几十个不同人），spike 中的拓扑算法能自动拆出来。</p>
+
+  <h2>怎么工作的</h2>
+
+  <p>核心难点不是"抓数据"（AKShare 已经把东财源包装得很好），而是<b>同一个名字可能对应多个不同的真人</b> —— A 股股东披露只有"姓名"，没有身份证、出生年月，API 把所有同名股东合并返回。整个系统围绕"区分人 ≠ 区分名字"这件事来组织。</p>
+
+  <div class="example">
+    <span class="label">用一个真实案例展示</span>
+    <b>搜索"吕强"</b>。东财说他在 <b>111 家</b> 公司有持仓 —— 看起来是个超级散户。但深入看：他和"香港中央结算"在 63 家公司"协同"（一个自然人不可能 63 家走港股通入仓）、"吕"姓里第二名"吕良丰"只有 12 家（断崖）—— 这"吕强"其实是<b>几十个不同的真人被合并成了一条</b>。<br><br>
+    系统做的事：把"吕强"在 111 家公司的出现当成节点，<b>两家公司只要共享 ≥ 1 个非平凡个人协同股东就连边</b>，跑连通分量。结果拆成 92 个候选实体：
+    <ul style="margin-top:.6em">
+      <li><span class="pill high">高置信</span> 「吕强」#1 · 13 家公司 · "与李红同公司 10 次" —— 几乎可以确定的真实"吕强 + 李红"家族 / 合伙关系</li>
+      <li><span class="pill mid">中置信</span> 「吕强」#2..#8 · 各 2 家 · 不同协同人</li>
+      <li><span class="pill sgl">单飞 ×84</span> 这 84 家几乎肯定是 84 个不同的"吕强"，单凭拓扑信号无法关联</li>
+    </ul>
+    <b>对照</b>：搜索"王传福" → 只在比亚迪 1 家 → 不触发消歧 → 直接展示该人物的 19 个季度持仓时间线、Wikidata（Q716030、1966-04-08、比亚迪 CEO）、当前市值 1578 亿。
+  </div>
+
+  <h3>四个视图（永远从一个焦点出发）</h3>
+
+  <figure class="diagram" aria-label="四视图架构">
+    <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" font-size="13">
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g fill="currentColor" stroke="currentColor" fill-opacity="0">
+        <rect x="20" y="20" width="200" height="50" rx="8"/>
+        <text x="120" y="42" text-anchor="middle" fill="currentColor" fill-opacity="1" font-weight="600">发现页</text>
+        <text x="120" y="59" text-anchor="middle" fill="currentColor" fill-opacity=".7" font-size="11">高频股东榜 / 协同对榜</text>
+
+        <rect x="240" y="20" width="200" height="50" rx="8"/>
+        <text x="340" y="42" text-anchor="middle" fill="currentColor" fill-opacity="1" font-weight="600">搜索框</text>
+        <text x="340" y="59" text-anchor="middle" fill="currentColor" fill-opacity=".7" font-size="11">人名 / 公司双轨补全</text>
+
+        <rect x="460" y="20" width="200" height="50" rx="8"/>
+        <text x="560" y="42" text-anchor="middle" fill="currentColor" fill-opacity="1" font-weight="600">公司视角</text>
+        <text x="560" y="59" text-anchor="middle" fill="currentColor" fill-opacity=".7" font-size="11">前十大表 / 股权变迁图</text>
+
+        <rect x="20" y="110" width="320" height="70" rx="8" stroke-dasharray="5,3"/>
+        <text x="180" y="135" text-anchor="middle" fill="currentColor" fill-opacity="1" font-weight="600">同名 Hub 页（多桶时）</text>
+        <text x="180" y="153" text-anchor="middle" fill="currentColor" fill-opacity=".7" font-size="11">「吕强」 #1 #2 #3 ... 卡片网格</text>
+        <text x="180" y="170" text-anchor="middle" fill="currentColor" fill-opacity=".7" font-size="11">每张卡显示置信度 + 证据</text>
+
+        <rect x="360" y="110" width="320" height="70" rx="8"/>
+        <text x="520" y="135" text-anchor="middle" fill="currentColor" fill-opacity="1" font-weight="600">人物 Entity 页</text>
+        <text x="520" y="153" text-anchor="middle" fill="currentColor" fill-opacity=".7" font-size="11">Wikidata / 持仓表 / 时间线 / 市值 /</text>
+        <text x="520" y="170" text-anchor="middle" fill="currentColor" fill-opacity=".7" font-size="11">协同股东 / Ego-Network 入口</text>
+
+        <rect x="180" y="210" width="320" height="50" rx="8"/>
+        <text x="340" y="232" text-anchor="middle" fill="currentColor" fill-opacity="1" font-weight="600">Ego-Network 视图</text>
+        <text x="340" y="249" text-anchor="middle" fill="currentColor" fill-opacity=".7" font-size="11">1/2 跳过滤 · 节点上限 100 · 焦点高亮</text>
+      </g>
+      <g fill="none" stroke="currentColor" stroke-width="1.5" opacity=".6">
+        <path d="M120 70 L180 110" marker-end="url(#arr)"/>
+        <path d="M340 70 L180 110" marker-end="url(#arr)"/>
+        <path d="M340 70 L520 110" marker-end="url(#arr)"/>
+        <path d="M560 70 L520 110" marker-end="url(#arr)"/>
+        <path d="M180 180 L320 210" marker-end="url(#arr)"/>
+        <path d="M520 180 L360 210" marker-end="url(#arr)"/>
+        <path d="M250 145 L360 145" marker-end="url(#arr)" stroke-dasharray="4,3"/>
+      </g>
+    </svg>
+    <figcaption>从发现/搜索/公司任一入口出发 → 多桶名字进 Hub 页选择 → 单桶或选定后进 Entity 页 → 可扩展为 Ego-Network</figcaption>
+  </figure>
+
+  <h3>三条铁律</h3>
+  <ul>
+    <li><b>永远从一个具体焦点开始</b>，不展示全市场（避免节点爆炸）</li>
+    <li><b>网络图节点硬上限 ~100</b>，超过自动折叠或强制过滤</li>
+    <li><b>全市场聚合分析后端预聚合</b>，前端只读快照（榜单 / 簇 / 异动）</li>
+  </ul>
+
+  <h2>关键决策 &amp; 为什么</h2>
+  <ul>
+    <li><b>数据源用 AKShare</b>（不是 Tushare）：免费、覆盖好、`stock_gdfx_*` 系列字段稳定；Tushare Pro `top10_holders` 要 2000 积分门槛</li>
+    <li><b>行情用腾讯源 `stock_zh_a_hist_tx`</b>：AKShare 默认走东财 `push2his` 子域被 GFW 截断（TLS 握手后空响应）；腾讯源稳定</li>
+    <li><b>市值同时存不复权 + 前复权</b>：不复权用于"当时市值"，前复权用于"持仓真实变化趋势"</li>
+    <li><b>不上 Tushare / Wind</b>，因为受众是小团队 / 朋友圈，零预算；数据源选型按"免费 + 稳定"优先</li>
+    <li><b>同名消歧不追求 100% 精确</b>：采用"置信度分级 + 实体桶 + 人工修正"；置信度用<b>文字标签 + 证据</b>而不是百分比（避免"85%" 这种伪精确）</li>
+    <li><b>URL 层级 Hub/Entity 分离</b>：<code>#/p/吕强</code> 是 hub 页（只有桶卡片）、<code>#/p/吕强/1</code> 是 entity 页；避免"既承认 N 人又把数据混着算"的自相矛盾</li>
+    <li><b>前端 TS + React + Vite + TanStack Query/Table</b>：不上 Next.js（不需 SSR）、不上 Tailwind（数据密集型 UI 自定义多）、不上 Redux（TanStack Query 够）</li>
+    <li><b>本地 Web 服务而非桌面 app 或 Claude skill</b>：可视化需求强、数据量大需本地 DB、团队多人用、deploy 链路最短</li>
+    <li><b>SQLite 而非 PostgreSQL</b>：单机够用，5 个文件分库避免锁争用；> 100M 行时再考虑升级</li>
+    <li><b>抓取调度按财报披露窗口加密</b>：4 月底 / 8 月底 / 10 月底 / 次年 4 月底前后每天增量；其余时间每周一次扫盲</li>
+  </ul>
+
+  <h2>已验证（数据为证）</h2>
+  <ul>
+    <li><b>数据链路通</b>：美的 + 比亚迪 19 季度共 19 行 / 季度 × 2 公司 × 2 接口数据全部拉到，SQLite 存得下、查得快</li>
+    <li><b>市值算对</b>：王传福 (5.14 亿股 × 收盘价) 时间线：308 亿 (2020Q1) → 1713 亿 (2022Q2 高点) → 1017 亿 (2023Q4 低点) → 1578 亿 (2024Q3)，与公开报道一致</li>
+    <li><b>Wikidata 头部覆盖好</b>：王传福 / 方洪波 / 吕向阳 / 夏佐全 全部命中，含结构化字段（出生年月、雇主、zh-wiki 链接、QID）</li>
+    <li><b>协同分析数据是金矿</b>：东财预聚合了 1434 个核心个人股东的跨公司持仓，37,620 个不重复股东 / 716,875 条协同关系</li>
+    <li><b>家族 / 一致行动人识别准</b>：陈海华+徐国新 30 家、周信钢+李欣 28 家、李东璘+魏巍 25 家 等都是稳定可识别的协同对</li>
+    <li><b>同名消歧算法成功</b>：吕强 111 家 → 92 桶，最大桶 13 家含李红 10 次 → 与"吕强+李红"协同对完全吻合；陈峰 56 家 → 42 桶（无大桶，正确识别多人）；王传福 1 家 → 1 桶（不误拆）</li>
+    <li><b>UI 四视图 + 主题切换 + 排序 + 分页可用</b>：单文件 ~1300 行 v2 原型，浏览器内可玩</li>
+  </ul>
+
+  <h2>遗留问题与风险</h2>
+  <ul>
+    <li><b>Layer 3 软聚类未做</b>：吕强 84 个单飞桶无法进一步关联或拆分；工程化阶段要补"行业 + 注册地 + 时间窗 + 持股顺位"软聚类</li>
+    <li><b>Layer 5 人工修正 UI 未做</b>：用户合并 / 拆分 / 绑定 QID 操作 + audit trail 沉淀进 <code>user_annotation</code> 表反哺算法 —— 工程化重要补充</li>
+    <li><b>协同分析"个股详情"截断</b>：每条 record 只给前 10 家。"30 家协同"只知道其中 10 家具体名字</li>
+    <li><b>GFW 风险</b>：东财 <code>push2his</code> 子域被截断已有 workaround（腾讯源）；未来其他子域也可能变化，需要监控</li>
+    <li><b>Wikidata 命中可能错绑</b>：UI 上必须显示"可能对应该实体或别的同名实体"提示，避免给出虚假身份</li>
+    <li><b>合规边际</b>：数据公开披露 → 抓取本身合规；但整合后展示个人身份信息有边际风险；当前明确"小团队 / 朋友圈 + Caddy basic auth"使用，<b>不部署到公网</b></li>
+    <li><b>性能瓶颈</b>：全市场全历史 20 年单线程抓取需 ~18 天，必须并发 + 增量；Day 0 拿最近一期可上线，历史回填后台跑</li>
+  </ul>
+
+  <div class="footer">
+    这是摘要版。完整实现细节、决策日志、12 个 PR 拆分见
+    <a href="../../agents/shareholder-network/design.md"><code>docs/designs/agents/shareholder-network/design.md</code></a>。
+  </div>
+</main>
+</body>
+</html>
