@@ -14,8 +14,9 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api._auth import require_auth
 from app.config import DB_PATHS
 from app.models import AnnotationRequest, AnnotationResponse
 
@@ -23,7 +24,9 @@ router = APIRouter(tags=["annotation"])
 
 
 @router.post("/annotation", response_model=AnnotationResponse)
-def create_annotation(req: AnnotationRequest) -> AnnotationResponse:
+def create_annotation(
+    req: AnnotationRequest, _user: str | None = Depends(require_auth)
+) -> AnnotationResponse:
     if not req.payload:
         raise HTTPException(status_code=422, detail="payload required")
     path = DB_PATHS["entities"]
@@ -49,7 +52,9 @@ def create_annotation(req: AnnotationRequest) -> AnnotationResponse:
 
 
 @router.get("/annotation", response_model=list[AnnotationResponse])
-def list_annotations(limit: int = 50) -> list[AnnotationResponse]:
+def list_annotations(
+    limit: int = 50, _user: str | None = Depends(require_auth)
+) -> list[AnnotationResponse]:
     path = DB_PATHS["entities"]
     if not path.exists():
         return []

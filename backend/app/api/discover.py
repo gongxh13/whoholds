@@ -15,8 +15,10 @@ def top_cross_holders(limit: int = 20) -> list[CrossHolder]:
 
     Source: `holder_companies` (whole-market coverage from teamwork ETL).
     `total_value` is enriched from holdings × latest close when available.
+
+    Implementation: 3 queries total (entities × 2 + holdings + prices),
+    not (1 + N + N × M) — keep it under 500ms for limit=20.
     """
-    out: list[CrossHolder] = []
     try:
         with connect("entities") as conn:
             rows = conn.execute(
@@ -32,37 +34,46 @@ def top_cross_holders(limit: int = 20) -> list[CrossHolder]:
                 (limit,),
             ).fetchall()
             holders = [(r["holder_name"], r["n_companies"]) for r in rows]
-            companies_by_holder: dict[str, list[CrossHolderCompany]] = {}
-            for name, _ in holders:
-                comp_rows = conn.execute(
-                    """
-                    SELECT stock_code, stock_name FROM holder_companies
-                    WHERE holder_name = ? LIMIT 25
-                    """,
-                    (name,),
-                ).fetchall()
-                companies_by_holder[name] = [
-                    CrossHolderCompany(
-                        stock_code=r["stock_code"],
-                        stock_name=r["stock_name"],
-                        pct_total=None,
-                        holdings=0,
-                    )
-                    for r in comp_rows
-                ]
+            if not holders:
+                return []
+            names = [n for n, _ in holders]
+            placeholders = ",".join("?" * len(names))
+            comp_rows = conn.execute(
+                f"""
+                SELECT holder_name, stock_code, stock_name
+                FROM holder_companies
+                WHERE holder_name IN ({placeholders})
+                ORDER BY holder_name, stock_code
+                """,
+                names,
+            ).fetchall()
     except Exception:
         return []
-    for name, n in holders:
-        total_value = _enrich_total_value(name)
-        out.append(
-            CrossHolder(
-                holder_name=name,
-                n_companies=n,
-                companies=companies_by_holder.get(name, []),
-                total_value=total_value,
+
+    companies_by_holder: dict[str, list[CrossHolderCompany]] = {n: [] for n in names}
+    for r in comp_rows:
+        bucket = companies_by_holder[r["holder_name"]]
+        if len(bucket) >= 25:
+            continue
+        bucket.append(
+            CrossHolderCompany(
+                stock_code=r["stock_code"],
+                stock_name=r["stock_name"],
+                pct_total=None,
+                holdings=0,
             )
         )
-    return out
+
+    total_value_by_holder = _enrich_total_values(names)
+    return [
+        CrossHolder(
+            holder_name=name,
+            n_companies=n,
+            companies=companies_by_holder.get(name, []),
+            total_value=total_value_by_holder.get(name),
+        )
+        for name, n in holders
+    ]
 
 
 @router.get("/top-coholder-pairs", response_model=list[CoholderPair])
@@ -93,46 +104,77 @@ def top_coholder_pairs(limit: int = 50, min_co: int = 3) -> list[CoholderPair]:
         return []
 
 
-def _enrich_total_value(name: str) -> float | None:
-    """Best-effort SUM(holdings × close) from holdings.db + prices.db.
+def _enrich_total_values(names: list[str]) -> dict[str, float]:
+    """Batch SUM(holdings × close) for many holders at once.
 
-    Falls back to None when either DB is missing or the holder has no detailed
-    rows in `top10_holders` (i.e. teamwork-only).
+    Two queries: one into holdings (latest report per holder/stock), one into
+    prices (latest close ≤ report_date). Python combines. O(holders + holdings)
+    instead of O(holders × holdings) round trips.
     """
+    if not names:
+        return {}
+    placeholders = ",".join("?" * len(names))
     try:
         with connect("holdings") as hconn:
-            rows = hconn.execute(
-                """
-                SELECT t.stock_code, t.holdings, t.report_date
+            holding_rows = hconn.execute(
+                f"""
+                SELECT holder_name, stock_code, holdings, report_date
                 FROM top10_holders t
-                WHERE t.holder_name = ?
-                  AND t.report_date = (
+                WHERE holder_name IN ({placeholders})
+                  AND report_date = (
                       SELECT MAX(report_date) FROM top10_holders
-                      WHERE holder_name = ? AND stock_code = t.stock_code
+                      WHERE holder_name = t.holder_name AND stock_code = t.stock_code
                   )
                 """,
-                (name, name),
+                names,
             ).fetchall()
     except Exception:
-        return None
-    if not rows:
-        return None
-    total = 0.0
-    found = False
+        return {}
+    if not holding_rows:
+        return {}
+
+    # Group by (stock_code, report_date) so we only ask for each price once.
+    distinct_keys = {(r["stock_code"], r["report_date"]) for r in holding_rows}
+    price_lookup: dict[tuple[str, str], float] = {}
     try:
         with connect("prices") as pconn:
+            stocks = sorted({sc for sc, _ in distinct_keys})
+            stock_placeholders = ",".join("?" * len(stocks))
+            # Pull *all* non-adjust prices for these stocks; pick the right
+            # ≤report_date one in Python. Cheaper than N round-trips.
+            rows = pconn.execute(
+                f"""
+                SELECT stock_code, date, close FROM stock_daily_price
+                WHERE adjust = '' AND stock_code IN ({stock_placeholders})
+                """,
+                stocks,
+            ).fetchall()
+            by_stock: dict[str, list[tuple[str, float]]] = {}
             for r in rows:
-                price = pconn.execute(
-                    """
-                    SELECT close FROM stock_daily_price
-                    WHERE stock_code = ? AND adjust = '' AND date <= ?
-                    ORDER BY date DESC LIMIT 1
-                    """,
-                    (r["stock_code"], r["report_date"]),
-                ).fetchone()
-                if price and price["close"]:
-                    total += r["holdings"] * price["close"]
-                    found = True
+                by_stock.setdefault(r["stock_code"], []).append(
+                    (r["date"], r["close"])
+                )
+            for series in by_stock.values():
+                series.sort()  # ascending date
+            for stock_code, report_date in distinct_keys:
+                series = by_stock.get(stock_code) or []
+                last_close: float | None = None
+                for d, c in series:
+                    if d <= report_date and c:
+                        last_close = c
+                    elif d > report_date:
+                        break
+                if last_close is not None:
+                    price_lookup[(stock_code, report_date)] = last_close
     except Exception:
-        return None
-    return total if found else None
+        return {}
+
+    totals: dict[str, float] = {}
+    for r in holding_rows:
+        close = price_lookup.get((r["stock_code"], r["report_date"]))
+        if close is None:
+            continue
+        totals[r["holder_name"]] = totals.get(r["holder_name"], 0.0) + (
+            r["holdings"] * close
+        )
+    return totals
