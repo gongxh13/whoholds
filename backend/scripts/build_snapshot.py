@@ -54,7 +54,7 @@ def _check_zstd() -> None:
 
 
 def build_year_shard(label: str, start: str, end: str) -> Path:
-    """Slice prices.db into a year shard, zst -19 compress, return the .zst path."""
+    """Slice prices.db into a year shard, zst compress, return the .zst path."""
     src_path = DATA_DIR / "prices.db"
     if not src_path.exists():
         raise SystemExit(f"prices.db not found at {src_path}")
@@ -91,8 +91,11 @@ def build_year_shard(label: str, start: str, end: str) -> Path:
     print(f"  [{label}] split in {time.time()-t0:.1f}s, raw {out_db.stat().st_size/1024/1024:.1f} MB", flush=True)
 
     t0 = time.time()
+    # zstd -9 is the sweet spot for our distribution scenario: ~17% ratio at
+    # ~30 MB/s. -19 saves another ~15% size at ~5x the cpu time, not worth
+    # the wall-clock cost for ~510 MB total payload. Lossless either way.
     subprocess.run(
-        ["zstd", "-19", "-f", "-q", str(out_db), "-o", str(out_zst)],
+        ["zstd", "-9", "-f", "-q", str(out_db), "-o", str(out_zst)],
         check=True,
     )
     out_db.unlink()
@@ -114,7 +117,7 @@ def build_core() -> Path:
     subprocess.run(
         ["tar", "--zstd", "-cf", str(out), "-C", str(DATA_DIR), *members],
         check=True,
-        env={"ZSTD_CLEVEL": "19", **__import__("os").environ},
+        env={"ZSTD_CLEVEL": "9", **__import__("os").environ},
     )
     print(f"  [core] {time.time()-t0:.1f}s, {out.stat().st_size/1024/1024:.1f} MB", flush=True)
     return out

@@ -62,7 +62,8 @@ human_summary: ../../humans/db-snapshot-distribution/index.html
    - **按年 4 档**：360 MB–975 MB raw，**只有 hot 那档需要重传** ← 选定
 4. **压缩** —— 对 2026 年片实测：
    - gzip -9：74 MB → 16.9 MB（22.8%）
-   - **zstd -19：74 MB → 11.0 MB（14.9%）** ← 选 zstd
+   - zstd -19：74 MB → 11.0 MB（14.9%，5 MB/s 太慢，build --all ~20 min 不接受）
+   - **zstd -9：74 MB → ~13 MB（~17%，30 MB/s）** ← 选这个，build --all ~3 min
 5. **合并方式** —— 实测 `ATTACH + INSERT OR REPLACE` 把 810k 行合进空 db 用 0.8s，
    查询和源 db 完全一致（sh600004 close=8.52 两边相同）。ATTACH 在一次性脚本里
    不违反 CLAUDE.md 约定。
@@ -73,7 +74,7 @@ human_summary: ../../humans/db-snapshot-distribution/index.html
 
 ### 分片产物
 
-| 文件 | raw 估算 | zst -19 估算 | 重发频率 |
+| 文件 | raw 估算 | zst -9 估算 | 重发频率 |
 |------|----------|--------------|----------|
 | `prices_2005-2015.db.zst` | ~924 MB | **~138 MB** | 一次性 |
 | `prices_2016-2020.db.zst` | ~812 MB | **~121 MB** | 一次性 |
@@ -116,7 +117,7 @@ def build_year_shard(label, start, end):
     ).fetchall()
     shard.executemany("INSERT INTO stock_daily_price VALUES (?,?,?,?,?,?,?)", rows)
     shard.commit(); shard.close()
-    subprocess.run(["zstd", "-19", "-f", str(out), "-o", f"{out}.zst"], check=True)
+    subprocess.run(["zstd", "-9", "-f", str(out), "-o", f"{out}.zst"], check=True)
     out.unlink()  # 留 .zst，删 .db
 ```
 
