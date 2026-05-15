@@ -73,10 +73,14 @@ def download_release(
 def merge_prices_shard(zst_path: Path, target_conn: sqlite3.Connection) -> int:
     """Decompress one prices_*.db.zst and ATTACH + INSERT OR REPLACE into target."""
     db_tmp = zst_path.with_suffix("")  # drop .zst
+    zst_mb = zst_path.stat().st_size / 1024 / 1024
+    print(f"    decompressing {zst_path.name} ({zst_mb:.0f} MB)...", flush=True)
     subprocess.run(
         ["zstd", "-d", "-f", "-q", str(zst_path), "-o", str(db_tmp)],
         check=True,
     )
+    db_mb = db_tmp.stat().st_size / 1024 / 1024
+    print(f"    merging into prices.db ({db_mb:.0f} MB raw)...", flush=True)
     try:
         target_conn.execute(f"ATTACH DATABASE '{db_tmp}' AS src")
         try:
@@ -125,16 +129,20 @@ def run(
     if not skip_core:
         targets.append("core.tar.zst")
 
+    total_assets = len(targets)
     if from_local is not None:
         src_dir = from_local.resolve()
-        for asset in targets:
+        print(f">> [stage 1/3] copy {total_assets} asset(s) from {src_dir}", flush=True)
+        for i, asset in enumerate(targets, 1):
             src_file = src_dir / asset
             if not src_file.exists():
                 raise SystemExit(f"missing local asset: {src_file}")
             dst_file = SNAPSHOT_DIR / asset
+            print(f"  [{i}/{total_assets}] {asset} ({src_file.stat().st_size/1024/1024:.0f} MB)", flush=True)
             if src_file != dst_file:
                 shutil.copy(src_file, dst_file)
     else:
+        print(f">> [stage 1/3] download {total_assets} asset(s) from release '{tag}'", flush=True)
         download_release(tag=tag, repo=repo, targets=targets, dest=SNAPSHOT_DIR)
 
     # 1. Ensure schemas exist (idempotent).
@@ -145,7 +153,7 @@ def run(
         core_path = SNAPSHOT_DIR / "core.tar.zst"
         if not core_path.exists():
             raise SystemExit(f"core asset missing: {core_path}")
-        print(">> unpacking core.tar.zst into backend/data/", flush=True)
+        print(f">> [stage 2/3] unpack core.tar.zst ({core_path.stat().st_size/1024/1024:.0f} MB) → backend/data/", flush=True)
         restore_core(core_path)
 
     # 3. Merge prices shards into prices.db.
@@ -153,13 +161,16 @@ def run(
     target = sqlite3.connect(target_db)
     try:
         target.executescript("PRAGMA journal_mode=WAL;\n" + PRICES_SCHEMA)
-        for asset in shards:
+        n_shards = len(shards)
+        print(f">> [stage 3/3] merge {n_shards} prices shard(s) → prices.db", flush=True)
+        for idx, asset in enumerate(shards, 1):
             zst_path = SNAPSHOT_DIR / asset
             if not zst_path.exists():
                 raise SystemExit(f"shard missing: {zst_path}")
+            print(f"  [{idx}/{n_shards}] {asset}", flush=True)
             t0 = time.time()
             n = merge_prices_shard(zst_path, target)
-            print(f"  merged {asset}: {n} rows in {time.time()-t0:.1f}s", flush=True)
+            print(f"    ✓ {n} rows in {time.time()-t0:.1f}s", flush=True)
     finally:
         target.close()
 

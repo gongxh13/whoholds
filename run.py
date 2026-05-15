@@ -49,16 +49,21 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 
 def _setup_source(args: argparse.Namespace) -> int:
-    print(">> [1/3] install deps (uv + pnpm)")
+    print("\n========== setup (source mode) ==========", flush=True)
+    print(">> [1/3] install deps (uv sync + pnpm install) — ~2-3 min first time", flush=True)
     if cmd_install(args):
         return 1
-    print(">> [2/3] migrate (create empty SQLite files)")
+    print(">> [2/3] migrate (create empty SQLite schemas) — instant", flush=True)
     if cmd_migrate(args):
         return 1
     if args.skip_data:
-        print(">> [3/3] snapshot pull SKIPPED (--skip-data); run `python run.py snapshot pull` later")
+        print(">> [3/3] snapshot pull SKIPPED (--skip-data). Run later: `python run.py snapshot pull`", flush=True)
         return 0
-    print(">> [3/3] snapshot pull (download release data, ~5-10 min)")
+    if args.hot:
+        print(">> [3/3] snapshot pull --hot — download ~110 MB + merge (~2 min)", flush=True)
+    else:
+        print(">> [3/3] snapshot pull — download ~755 MB + merge (~8-15 min depending on network)", flush=True)
+        print("           progress shows per-shard; no live byte counter on the GitHub download itself.", flush=True)
     pull_cmd = ["uv", "run", "python", "scripts/restore_snapshot.py"]
     if args.repo:
         pull_cmd += ["--repo", args.repo]
@@ -66,8 +71,10 @@ def _setup_source(args: argparse.Namespace) -> int:
         pull_cmd += ["--hot"]
     rc = _run(pull_cmd, cwd=BACKEND)
     if rc != 0:
-        print("\nWARN: snapshot pull failed — UI still runs with empty DBs.")
-        print("       Re-run later with: python run.py snapshot pull")
+        print("\nWARN: snapshot pull failed — UI still runs with empty DBs.", flush=True)
+        print("       Re-run later with: python run.py snapshot pull", flush=True)
+        return rc
+    print("\n========== setup complete — start with `python run.py up` ==========", flush=True)
     return 0
 
 
