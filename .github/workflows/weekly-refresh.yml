@@ -50,8 +50,11 @@ jobs:
         working-directory: backend
         run: uv run python scripts/migrate.py
 
-      - name: pull previous snapshot from release
-        run: python run.py snapshot pull
+      - name: pull previous snapshot from release (hot + core only)
+        # Historical year shards (2005-2024) live in the release untouched —
+        # refresh only writes to current-year prices + core (holdings/entities).
+        # --clobber on upload preserves whatever we don't re-upload.
+        run: python run.py snapshot pull --hot
 
       - name: run incremental ETL
         run: |
