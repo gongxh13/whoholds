@@ -46,128 +46,174 @@ export function AnnotationsPage(): JSX.Element {
 
   return (
     <AppShell>
-      <h1 style={{ marginTop: 0 }}>用户标注</h1>
-      <p style={{ color: "var(--muted)" }}>
-        合并 / 拆分 / 绑定 Wikidata QID — 写入 entities.user_annotation 表（带 audit trail）。
-      </p>
+      <header style={{ marginBottom: 24 }}>
+        <h1>用户标注</h1>
+        <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+          合并 / 拆分 / 绑定 Wikidata QID — 写入 entities.user_annotation（带 audit trail），
+          触发涉及姓名的消歧重算。
+        </p>
+      </header>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          try {
-            JSON.parse(payload || "{}");
-          } catch (parseErr) {
-            setErr(`JSON 解析失败: ${(parseErr as Error).message}`);
-            return;
-          }
-          create.mutate();
-        }}
-        style={formStyle}
+      <div
+        style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 2fr)", gap: 24 }}
       >
-        <label htmlFor="op" style={lbl}>
-          操作
-        </label>
-        <select
-          id="op"
-          value={op}
-          onChange={(e) => setOp(e.target.value as AnnotationOp)}
-          style={ctl}
-        >
-          {OPS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <section className="card" style={{ padding: 20 }}>
+          <h2 style={{ marginBottom: 12 }}>新建标注</h2>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              try {
+                JSON.parse(payload || "{}");
+              } catch (parseErr) {
+                setErr(`JSON 解析失败: ${(parseErr as Error).message}`);
+                return;
+              }
+              create.mutate();
+            }}
+            style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}
+          >
+            <Field label="操作" id="op">
+              <select
+                id="op"
+                value={op}
+                onChange={(e) => setOp(e.target.value as AnnotationOp)}
+                className="input"
+              >
+                {OPS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-        <label htmlFor="payload" style={lbl}>
-          payload (JSON)
-        </label>
-        <textarea
-          id="payload"
-          rows={4}
-          value={payload}
-          onChange={(e) => setPayload(e.target.value)}
-          placeholder={opMeta?.help}
-          style={{ ...ctl, fontFamily: "monospace" }}
-        />
+            <Field label="payload (JSON)" id="payload">
+              <textarea
+                id="payload"
+                rows={5}
+                value={payload}
+                onChange={(e) => setPayload(e.target.value)}
+                placeholder={opMeta?.help}
+                className="input"
+                style={{ fontFamily: "var(--font-mono)", resize: "vertical" }}
+              />
+            </Field>
 
-        <label htmlFor="user" style={lbl}>
-          用户
-        </label>
-        <input id="user" value={user} onChange={(e) => setUser(e.target.value)} style={ctl} />
+            <Field label="用户" id="user">
+              <input
+                id="user"
+                value={user}
+                onChange={(e) => setUser(e.target.value)}
+                className="input"
+              />
+            </Field>
 
-        <div style={{ gridColumn: "1 / -1" }}>
-          <button type="submit" disabled={create.isPending} style={btn}>
-            {create.isPending ? "提交中…" : "提交"}
-          </button>
-          {err && <span style={{ color: "#c0392b", marginLeft: 12 }}>{err}</span>}
-        </div>
-      </form>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button type="submit" disabled={create.isPending} className="btn btn-primary">
+                {create.isPending ? "提交中…" : "提交"}
+              </button>
+              {err && <span style={{ color: "var(--danger)", fontSize: 12 }}>{err}</span>}
+              {create.isSuccess && !err && (
+                <span style={{ color: "var(--success)", fontSize: 12 }}>✓ 已提交</span>
+              )}
+            </div>
+          </form>
+        </section>
 
-      <section style={{ marginTop: 32 }}>
-        <h2 style={{ fontSize: "1rem", color: "var(--muted)" }}>历史标注（最近 100 条）</h2>
-        {list.isLoading && <p>加载中…</p>}
-        {list.data && (
-          <ul style={{ paddingLeft: 0, listStyle: "none" }}>
-            {list.data.map((a) => (
-              <Item key={a.id} a={a} />
-            ))}
-          </ul>
-        )}
-      </section>
+        <section>
+          <h2 style={{ marginBottom: 12 }}>历史标注</h2>
+          {list.isLoading && <p className="muted">加载中…</p>}
+          {list.data && list.data.length === 0 && (
+            <div
+              className="card"
+              style={{
+                padding: "var(--s-6)",
+                textAlign: "center",
+                color: "var(--muted)",
+                border: "1px dashed var(--line)",
+              }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 8 }}>∅</div>
+              <div style={{ fontSize: 13 }}>暂无标注</div>
+            </div>
+          )}
+          {list.data && list.data.length > 0 && (
+            <ul style={{ padding: 0, listStyle: "none", margin: 0, display: "grid", gap: 8 }}>
+              {list.data.map((a) => (
+                <Item key={a.id} a={a} />
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </AppShell>
+  );
+}
+
+function Field({
+  label,
+  id,
+  children,
+}: {
+  label: string;
+  id: string;
+  children: React.ReactNode;
+}): JSX.Element {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="muted"
+        style={{
+          fontSize: 11,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          fontWeight: 600,
+          display: "block",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </label>
+      {children}
+    </div>
   );
 }
 
 function Item({ a }: { a: AnnotationResponse }): JSX.Element {
   return (
-    <li
-      style={{
-        border: "1px solid var(--line)",
-        background: "var(--bg-elev)",
-        padding: "8px 12px",
-        marginBottom: 6,
-        borderRadius: 6,
-        fontSize: 13,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <strong>{a.op}</strong>
-        <span style={{ color: "var(--muted)" }}>
+    <li className="card" style={{ padding: "10px 14px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 4,
+        }}
+      >
+        <span style={{ fontWeight: 600, fontSize: 13 }}>
+          <span className="pill pill-person" style={{ marginRight: 8 }}>
+            {a.op}
+          </span>
+        </span>
+        <span className="faint" style={{ fontSize: 11 }}>
           #{a.id} · {a.user} · {a.ts.slice(0, 19).replace("T", " ")}
         </span>
       </div>
-      <pre style={{ margin: "4px 0 0", fontFamily: "monospace", fontSize: 12 }}>
+      <pre
+        style={{
+          margin: 0,
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          background: "var(--bg-sunken)",
+          padding: 8,
+          borderRadius: "var(--r-sm)",
+          overflowX: "auto",
+          color: "var(--muted)",
+        }}
+      >
         {JSON.stringify(a.payload, null, 2)}
       </pre>
     </li>
   );
 }
-
-const formStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "100px 1fr",
-  gap: 8,
-  background: "var(--bg-elev)",
-  padding: 16,
-  borderRadius: 8,
-  border: "1px solid var(--line)",
-};
-const lbl: React.CSSProperties = { color: "var(--muted)", fontSize: 13, alignSelf: "center" };
-const ctl: React.CSSProperties = {
-  background: "var(--bg)",
-  border: "1px solid var(--line)",
-  color: "var(--fg)",
-  padding: "6px 8px",
-  borderRadius: 6,
-  fontSize: 13,
-};
-const btn: React.CSSProperties = {
-  background: "var(--accent)",
-  color: "white",
-  border: "none",
-  padding: "6px 14px",
-  borderRadius: 6,
-  cursor: "pointer",
-};

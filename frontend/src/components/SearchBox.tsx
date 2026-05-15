@@ -1,7 +1,7 @@
 import { type SearchResponse, getSearch } from "@/lib/api";
 import { useEffect, useRef, useState } from "react";
 
-/** Debounced live-search box used in the header. Hits /api/search. */
+/** Debounced live-search box in the header. Hits /api/search. */
 export function SearchBox(): JSX.Element {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -29,11 +29,27 @@ export function SearchBox(): JSX.Element {
     setQ("");
   };
 
+  const hasResults = results.people.length > 0 || results.companies.length > 0;
+
   return (
-    <div style={{ position: "relative", flex: 1, maxWidth: 480 }}>
+    <div style={{ position: "relative", width: 360, maxWidth: "40vw" }}>
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: 10,
+          top: "50%",
+          transform: "translateY(-50%)",
+          color: "var(--faint)",
+          fontSize: 13,
+          pointerEvents: "none",
+        }}
+      >
+        ⌕
+      </span>
       <input
         type="search"
-        placeholder="搜索人名 / 公司名 / 代码 (Ctrl-K)"
+        placeholder="搜索人名 / 公司名 / 代码"
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
@@ -46,63 +62,63 @@ export function SearchBox(): JSX.Element {
           background: "var(--bg)",
           border: "1px solid var(--line)",
           color: "var(--fg)",
-          padding: "6px 10px",
-          borderRadius: 6,
-          fontSize: 14,
+          padding: "6px 10px 6px 28px",
+          height: 32,
+          borderRadius: "var(--r-sm)",
+          fontSize: 13,
+          outline: "none",
+          transition: "border-color 0.12s, box-shadow 0.12s",
+        }}
+        onFocusCapture={(e) => {
+          e.currentTarget.style.borderColor = "var(--accent)";
+          e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-bg)";
+        }}
+        onBlurCapture={(e) => {
+          e.currentTarget.style.borderColor = "var(--line)";
+          e.currentTarget.style.boxShadow = "none";
         }}
       />
-      {open && (results.people.length > 0 || results.companies.length > 0) && (
+      {open && hasResults && (
         <div
           style={{
             position: "absolute",
-            top: "100%",
+            top: "calc(100% + 4px)",
             left: 0,
             right: 0,
             background: "var(--bg-elev)",
             border: "1px solid var(--line)",
-            borderRadius: 6,
-            marginTop: 4,
-            maxHeight: 320,
+            borderRadius: "var(--r)",
+            maxHeight: 360,
             overflowY: "auto",
             zIndex: 50,
-            boxShadow: "0 4px 16px rgba(0,0,0,.1)",
+            boxShadow: "var(--shadow-lg)",
           }}
         >
           {results.companies.length > 0 && (
-            <div>
-              <Header>公司</Header>
+            <Section title="公司">
               {results.companies.map((c) => (
-                <a
+                <Row
                   key={c.stock_code}
                   href={`#/c/${c.stock_code}`}
-                  style={itemStyle}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={close}
-                >
-                  <span>{c.stock_name}</span>
-                  <span style={mutedStyle}>{c.stock_code}</span>
-                </a>
+                  primary={c.stock_name}
+                  secondary={c.stock_code}
+                  close={close}
+                />
               ))}
-            </div>
+            </Section>
           )}
           {results.people.length > 0 && (
-            <div>
-              <Header>个人</Header>
+            <Section title="个人">
               {results.people.map((p) => (
-                <a
+                <Row
                   key={p.name}
                   href={`#/p/${encodeURIComponent(p.name)}`}
-                  style={itemStyle}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={close}
-                >
-                  <span>{p.name}</span>
-                  <span style={mutedStyle}>
-                    {p.n_companies != null ? `${p.n_companies} 家` : ""}
-                  </span>
-                </a>
+                  primary={p.name}
+                  secondary={p.n_companies != null ? `${p.n_companies} 家公司` : ""}
+                  close={close}
+                />
               ))}
-            </div>
+            </Section>
           )}
         </div>
       )}
@@ -110,27 +126,69 @@ export function SearchBox(): JSX.Element {
   );
 }
 
-const itemStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  padding: "6px 10px",
-  color: "var(--fg)",
-  textDecoration: "none",
-};
-const mutedStyle: React.CSSProperties = { color: "var(--muted)", fontSize: 12 };
-
-function Header({ children }: { children: string }): JSX.Element {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}): JSX.Element {
   return (
-    <div
-      style={{
-        padding: "4px 10px",
-        fontSize: 11,
-        color: "var(--muted)",
-        background: "var(--bg)",
-        textTransform: "uppercase",
-      }}
-    >
+    <div>
+      <div
+        style={{
+          padding: "6px 12px",
+          fontSize: 10,
+          color: "var(--faint)",
+          background: "var(--bg-sunken)",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          fontWeight: 700,
+          borderBottom: "1px solid var(--line-muted)",
+        }}
+      >
+        {title}
+      </div>
       {children}
     </div>
+  );
+}
+
+function Row({
+  href,
+  primary,
+  secondary,
+  close,
+}: {
+  href: string;
+  primary: string;
+  secondary: string;
+  close: () => void;
+}): JSX.Element {
+  return (
+    <a
+      href={href}
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "8px 12px",
+        color: "var(--fg)",
+        textDecoration: "none",
+        borderBottom: "1px solid var(--line-muted)",
+        transition: "background 0.1s",
+      }}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={close}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "var(--bg-hover)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+      }}
+    >
+      <span style={{ fontSize: 13 }}>{primary}</span>
+      <span style={{ color: "var(--faint)", fontSize: 12 }}>{secondary}</span>
+    </a>
   );
 }

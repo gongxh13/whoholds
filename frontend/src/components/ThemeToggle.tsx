@@ -1,9 +1,14 @@
 import { useTheme } from "@/lib/theme";
 
-const LABEL: Record<string, string> = {
-  system: "🖥 跟随系统",
-  light: "☀ 亮色",
-  dark: "🌙 暗色",
+const ICON: Record<string, string> = {
+  system: "◐",
+  light: "○",
+  dark: "●",
+};
+const TIP: Record<string, string> = {
+  system: "跟随系统",
+  light: "亮色",
+  dark: "暗色",
 };
 
 export function ThemeToggle(): JSX.Element {
@@ -12,18 +17,33 @@ export function ThemeToggle(): JSX.Element {
     <button
       type="button"
       onClick={cycle}
-      title="切换主题"
+      title={`主题: ${TIP[pref]} (点击切换)`}
+      aria-label="切换主题"
       style={{
         background: "transparent",
         border: "1px solid var(--line)",
         color: "var(--fg)",
-        padding: "4px 10px",
-        borderRadius: 6,
+        width: 32,
+        height: 32,
+        borderRadius: "var(--r-sm)",
         cursor: "pointer",
-        fontSize: 12,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 15,
+        lineHeight: 1,
+        transition: "background 0.12s, border-color 0.12s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "var(--bg-hover)";
+        e.currentTarget.style.borderColor = "var(--line-strong)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+        e.currentTarget.style.borderColor = "var(--line)";
       }}
     >
-      {LABEL[pref] ?? pref}
+      {ICON[pref] ?? "◐"}
     </button>
   );
 }

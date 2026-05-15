@@ -1,73 +1,359 @@
-/* CSS variables drive the theme; data-theme overrides prefers-color-scheme.
-   PR 4 will polish this and add the three-state toggle (system/light/dark). */
+/* whoholds — design system tokens.
+   Palette + scale + components, all CSS-variable-driven so the theme toggle
+   (system / light / dark) is a single attribute flip on <html>. */
+
 :root {
-  --fg: #1a1a1a;
-  --muted: #666;
-  --line: #e3e3e3;
-  --accent: #2563eb;
-  --bg: #fff;
-  --bg-elev: #fafafa;
+  /* === Base palette (Light) === */
+  --bg: #f6f8fa;
+  --bg-elev: #ffffff;
+  --bg-sunken: #eaeef2;
+  --bg-hover: rgba(31, 35, 40, 0.04);
+  --bg-active: rgba(31, 35, 40, 0.07);
+
+  --line: #d0d7de;
+  --line-strong: #afb8c1;
+  --line-muted: #eaeef2;
+
+  --fg: #1f2328;
+  --fg-strong: #0c0e10;
+  --muted: #59636e;
+  --faint: #818b98;
+
+  /* === Accents === */
+  --accent: #0969da;
+  --accent-bg: #ddf4ff;
+  --accent-fg: #0969da;
+  --accent-strong: #0550ae;
+
+  --warn: #bc4c00;
+  --warn-bg: #fff1e5;
+  --success: #1a7f37;
+  --success-bg: #dafbe1;
+  --danger: #cf222e;
+  --danger-bg: #ffebe9;
+
+  --focus-orange: #f78166;
+  --focus-grad: linear-gradient(135deg, rgba(247, 129, 102, 0.08), transparent 60%);
+
+  /* === Pill / badge colors === */
+  --pill-person-bg: #ddf4ff;
+  --pill-person-fg: #0969da;
+  --pill-inst-bg: #eaeef2;
+  --pill-inst-fg: #59636e;
+
+  /* === Shadows === */
+  --shadow-sm: 0 1px 0 rgba(31, 35, 40, 0.04);
+  --shadow: 0 1px 3px rgba(31, 35, 40, 0.06), 0 4px 8px rgba(31, 35, 40, 0.04);
+  --shadow-lg: 0 8px 24px rgba(31, 35, 40, 0.08), 0 2px 6px rgba(31, 35, 40, 0.04);
+
+  /* === Radii === */
+  --r-sm: 4px;
+  --r: 8px;
+  --r-lg: 12px;
+  --r-pill: 999px;
+
+  /* === Typography === */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", Menlo,
+    monospace;
+
+  /* === Spacing scale (4 px base) === */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+
+  /* === Chart === */
+  --chart-grid: #d0d7de;
+  --chart-axis: #818b98;
+
+  --header-h: 56px;
+  color-scheme: light;
 }
 
+/* System-preference dark mode (only when data-theme is unset or "system") */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --fg: #e8e8e8;
-    --muted: #9a9a9a;
-    --line: #333;
-    --accent: #6ea8fe;
-    --bg: #161616;
-    --bg-elev: #1f1f1f;
+  :root:not([data-theme]),
+  :root[data-theme="system"] {
+    --bg: #0d1117;
+    --bg-elev: #161b22;
+    --bg-sunken: #010409;
+    --bg-hover: rgba(177, 186, 196, 0.08);
+    --bg-active: rgba(177, 186, 196, 0.14);
+    --line: #30363d;
+    --line-strong: #444c56;
+    --line-muted: #21262d;
+    --fg: #e6edf3;
+    --fg-strong: #f0f6fc;
+    --muted: #9198a1;
+    --faint: #6e7681;
+    --accent: #4493f8;
+    --accent-bg: #0c2d6b;
+    --accent-fg: #79c0ff;
+    --accent-strong: #58a6ff;
+    --warn: #f0883e;
+    --warn-bg: rgba(240, 136, 62, 0.15);
+    --success: #3fb950;
+    --success-bg: rgba(63, 185, 80, 0.15);
+    --danger: #f85149;
+    --danger-bg: rgba(248, 81, 73, 0.15);
+    --focus-orange: #f78166;
+    --focus-grad: linear-gradient(135deg, rgba(247, 129, 102, 0.18), transparent 60%);
+    --pill-person-bg: rgba(68, 147, 248, 0.18);
+    --pill-person-fg: #79c0ff;
+    --pill-inst-bg: #21262d;
+    --pill-inst-fg: #9198a1;
+    --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.4);
+    --shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+    --chart-grid: #30363d;
+    --chart-axis: #6e7681;
+    color-scheme: dark;
   }
 }
 
-[data-theme="light"] {
-  --fg: #1a1a1a;
-  --muted: #666;
-  --line: #e3e3e3;
-  --accent: #2563eb;
-  --bg: #fff;
-  --bg-elev: #fafafa;
+/* Explicit dark override */
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --bg-elev: #161b22;
+  --bg-sunken: #010409;
+  --bg-hover: rgba(177, 186, 196, 0.08);
+  --bg-active: rgba(177, 186, 196, 0.14);
+  --line: #30363d;
+  --line-strong: #444c56;
+  --line-muted: #21262d;
+  --fg: #e6edf3;
+  --fg-strong: #f0f6fc;
+  --muted: #9198a1;
+  --faint: #6e7681;
+  --accent: #4493f8;
+  --accent-bg: #0c2d6b;
+  --accent-fg: #79c0ff;
+  --accent-strong: #58a6ff;
+  --warn: #f0883e;
+  --warn-bg: rgba(240, 136, 62, 0.15);
+  --success: #3fb950;
+  --success-bg: rgba(63, 185, 80, 0.15);
+  --danger: #f85149;
+  --danger-bg: rgba(248, 81, 73, 0.15);
+  --focus-orange: #f78166;
+  --focus-grad: linear-gradient(135deg, rgba(247, 129, 102, 0.18), transparent 60%);
+  --pill-person-bg: rgba(68, 147, 248, 0.18);
+  --pill-person-fg: #79c0ff;
+  --pill-inst-bg: #21262d;
+  --pill-inst-fg: #9198a1;
+  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --chart-grid: #30363d;
+  --chart-axis: #6e7681;
+  color-scheme: dark;
 }
 
-[data-theme="dark"] {
-  --fg: #e8e8e8;
-  --muted: #9a9a9a;
-  --line: #333;
-  --accent: #6ea8fe;
-  --bg: #161616;
-  --bg-elev: #1f1f1f;
-}
-
-* {
+/* === Reset === */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  padding: 0;
+}
+
+body {
   background: var(--bg);
   color: var(--fg);
-  font: 16px / 1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--fg-strong);
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: 24px;
+  line-height: 1.25;
+}
+h2 {
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 12px;
+}
+h3 {
+  font-size: 15px;
+}
+
+p {
+  margin: 0;
 }
 
 a {
   color: var(--accent);
   text-decoration: none;
+  transition: color 0.12s ease;
+}
+a:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-a:hover {
-  text-decoration: underline;
+button {
+  font-family: inherit;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+code {
+  background: var(--bg-sunken);
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-muted);
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 6px;
+  border: 3px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-strong);
+}
+
+/* === Reusable component primitives === */
+
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-hover {
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+.card-hover:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.pill-person {
+  background: var(--pill-person-bg);
+  color: var(--pill-person-fg);
+}
+.pill-inst {
+  background: var(--pill-inst-bg);
+  color: var(--pill-inst-fg);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--line-strong);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent-strong);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.input {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.muted {
+  color: var(--muted);
+}
+.faint {
+  color: var(--faint);
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 main {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 32px 20px;
+  padding: var(--s-5) var(--s-5);
 }
 
-code {
-  background: rgba(127, 127, 127, 0.16);
-  padding: 0.1em 0.35em;
-  border-radius: 3px;
-  font-size: 0.9em;
+@media (max-width: 720px) {
+  main {
+    padding: var(--s-4) var(--s-3);
+  }
 }

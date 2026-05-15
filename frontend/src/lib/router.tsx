@@ -21,7 +21,21 @@ interface RouterProps {
 
 function readHashPath(defaultPath: string): string {
   const raw = window.location.hash.replace(/^#/, "");
-  return raw.length > 0 ? raw : defaultPath;
+  // Strip query string — route matching only looks at the path portion.
+  // DataTable writes sort/page state as `#/?cx=…`, which would otherwise
+  // never match a route and leave the page blank.
+  const pathOnly = raw.split("?")[0] ?? "";
+  return pathOnly.length > 0 ? pathOnly : defaultPath;
+}
+
+function safeDecode(s: string): string {
+  // decodeURIComponent throws URIError on malformed %XX — return raw rather
+  // than blank-screen the whole route.
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
 }
 
 function matchRoute(pattern: string, path: string): RouteParams | null {
@@ -33,7 +47,7 @@ function matchRoute(pattern: string, path: string): RouteParams | null {
     const pat = patternParts[i] ?? "";
     const seg = pathParts[i] ?? "";
     if (pat.startsWith(":")) {
-      params[pat.slice(1)] = decodeURIComponent(seg);
+      params[pat.slice(1)] = safeDecode(seg);
     } else if (pat !== seg) {
       return null;
     }

@@ -35,8 +35,20 @@ export function DataTable<T extends object>({
 
   useEffect(() => {
     if (!urlKey) return;
-    writeUrlState(urlKey, { sorting, page: pageIndex });
-  }, [urlKey, sorting, pageIndex]);
+    // Treat current state as default if it matches `defaultSort` + page 0 —
+    // otherwise we'd pollute the URL with the initial sort on every page load.
+    const sortingIsDefault =
+      sorting.length === defaultSort.length &&
+      sorting.every((s, i) => {
+        const d = defaultSort[i];
+        return d && s.id === d.id && s.desc === d.desc;
+      });
+    if (sortingIsDefault && pageIndex === 0) {
+      writeUrlState(urlKey, null);
+    } else {
+      writeUrlState(urlKey, { sorting, page: pageIndex });
+    }
+  }, [urlKey, sorting, pageIndex, defaultSort]);
 
   const table = useReactTable({
     data,
@@ -94,8 +106,17 @@ export function DataTable<T extends object>({
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr key={row.id}>
+          {table.getRowModel().rows.map((row, i) => (
+            <tr
+              key={row.id}
+              style={{ background: i % 2 === 0 ? "transparent" : "var(--bg)" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--bg-hover)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "var(--bg)";
+              }}
+            >
               {row.getVisibleCells().map((c) => (
                 <td key={c.id} style={tdStyle}>
                   {flexRender(c.column.columnDef.cell, c.getContext())}
@@ -107,23 +128,33 @@ export function DataTable<T extends object>({
       </table>
       {data.length > pageSize && (
         <div style={pagerStyle}>
-          <button type="button" onClick={() => setPageIndex(0)} disabled={pageIndex === 0}>
+          <button
+            type="button"
+            onClick={() => setPageIndex(0)}
+            disabled={pageIndex === 0}
+            className="btn"
+            style={{ padding: "3px 8px", minWidth: 28 }}
+          >
             «
           </button>
           <button
             type="button"
             onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
             disabled={pageIndex === 0}
+            className="btn"
+            style={{ padding: "3px 8px", minWidth: 28 }}
           >
             ‹
           </button>
-          <span style={{ color: "var(--muted)", fontSize: 12 }}>
+          <span className="muted tabular" style={{ fontSize: 12, padding: "0 8px" }}>
             {pageIndex + 1} / {totalPages}
           </span>
           <button
             type="button"
             onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
             disabled={pageIndex >= totalPages - 1}
+            className="btn"
+            style={{ padding: "3px 8px", minWidth: 28 }}
           >
             ›
           </button>
@@ -131,6 +162,8 @@ export function DataTable<T extends object>({
             type="button"
             onClick={() => setPageIndex(totalPages - 1)}
             disabled={pageIndex >= totalPages - 1}
+            className="btn"
+            style={{ padding: "3px 8px", minWidth: 28 }}
           >
             »
           </button>
@@ -147,20 +180,24 @@ const tableStyle: React.CSSProperties = {
 };
 const thStyle: React.CSSProperties = {
   textAlign: "left",
-  padding: "8px 10px",
+  padding: "8px 12px",
   borderBottom: "1px solid var(--line)",
-  background: "var(--bg-elev)",
+  background: "var(--bg-sunken)",
   fontWeight: 600,
+  fontSize: 11,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  color: "var(--muted)",
 };
 const tdStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  borderBottom: "1px solid var(--line)",
+  padding: "10px 12px",
+  borderBottom: "1px solid var(--line-muted)",
 };
 const pagerStyle: React.CSSProperties = {
   display: "flex",
-  gap: 6,
+  gap: 4,
   alignItems: "center",
-  marginTop: 8,
+  marginTop: 12,
   justifyContent: "flex-end",
 };
 
@@ -174,21 +211,22 @@ function readUrlState(key: string): UrlState | null {
   const raw = usp.get(key);
   if (!raw) return null;
   try {
-    return JSON.parse(decodeURIComponent(raw)) as UrlState;
+    return JSON.parse(raw) as UrlState;
   } catch {
     return null;
   }
 }
 
-function writeUrlState(key: string, state: UrlState): void {
+function writeUrlState(key: string, state: UrlState | null): void {
   const hash = window.location.hash.replace(/^#/, "");
   const qIdx = hash.indexOf("?");
   const base = qIdx >= 0 ? hash.slice(0, qIdx) : hash;
   const usp = new URLSearchParams(qIdx >= 0 ? hash.slice(qIdx + 1) : "");
-  if (state.sorting.length === 0 && state.page === 0) {
+  if (state === null) {
     usp.delete(key);
   } else {
-    usp.set(key, encodeURIComponent(JSON.stringify(state)));
+    // URLSearchParams handles percent-encoding — don't encode the JSON twice.
+    usp.set(key, JSON.stringify(state));
   }
   const qs = usp.toString();
   const next = qs ? `${base}?${qs}` : base;
