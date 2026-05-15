@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数据库快照分发 — 设计摘要</title>
+<style>
+  :root { --fg:#1a1a1a; --muted:#666; --line:#e3e3e3; --accent:#2563eb; --bg:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e8e8e8; --muted:#9a9a9a; --line:#333; --accent:#6ea8fe; --bg:#161616; }
+  }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--fg); margin:0; padding:48px 20px;
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; }
+  main { max-width:760px; margin:0 auto; }
+  h1 { font-size:1.7rem; margin:0 0 .35em; line-height:1.25; }
+  h2 { font-size:.82rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+    margin:2.3em 0 .55em; }
+  p { margin:.6em 0; }
+  .meta { color:var(--muted); font-size:.92rem; margin-bottom:1.6em; }
+  .badge { display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; padding:.18em .55em; border-radius:4px; vertical-align:middle; }
+  .badge.validated   { background:#dcfce7; color:#166534; }
+  .badge.implemented { background:#dbeafe; color:#1e40af; }
+  .badge.abandoned   { background:#fee2e2; color:#991b1b; }
+  @media (prefers-color-scheme: dark) {
+    .badge.validated   { background:#14532d; color:#bbf7d0; }
+    .badge.implemented { background:#1e3a8a; color:#bfdbfe; }
+    .badge.abandoned   { background:#7f1d1d; color:#fecaca; }
+  }
+  ul { padding-left:1.25em; margin:.5em 0; }
+  li { margin:.35em 0; }
+  a { color:var(--accent); }
+  code { background:rgba(127,127,127,.16); padding:.1em .35em; border-radius:3px; font-size:.9em; }
+  ol.howto { padding-left:1.4em; margin:.7em 0; }
+  ol.howto li { margin:.5em 0; }
+  figure.diagram { margin:1.5em 0; text-align:center; overflow-x:auto; }
+  figure.diagram svg, figure.diagram img { max-width:100%; height:auto; }
+  figure.diagram figcaption { color:var(--muted); font-size:.85rem; margin-top:.5em; }
+  .example { border-left:3px solid var(--accent); background:rgba(127,127,127,.07);
+    padding:.7em 1em; border-radius:0 6px 6px 0; margin:1.2em 0; }
+  .example .label { display:block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--muted); margin-bottom:.3em; }
+  table.sizes { border-collapse:collapse; width:100%; margin:.8em 0 1.2em; font-size:.92rem; }
+  table.sizes th, table.sizes td { padding:.45em .7em; border-bottom:1px solid var(--line); text-align:left; }
+  table.sizes th { color:var(--muted); font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; }
+  table.sizes td:nth-child(2), table.sizes td:nth-child(3) { font-variant-numeric:tabular-nums; }
+  .footer { margin-top:3em; padding-top:1.1em; border-top:1px solid var(--line);
+    color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>数据库快照分发 <span class="badge validated">validated</span></h1>
+  <div class="meta">
+    验证于 2026-05-15 · 由一次 <code>/spike</code> 而来 ·
+    完整细节见 <a href="../../agents/db-snapshot-distribution/design.md">agent 设计文档</a>
+  </div>
+
+  <h2>这是什么</h2>
+  <p>把本机已经跑完 Day-0 全量 bootstrap 的 5 个 SQLite（合计 3.5 GB）打包成 GitHub Release 附件，
+  让朋友新机器在 10 分钟内拿到完整数据集，不必再花 10 小时跑一遍 ETL。</p>
+
+  <h2>怎么工作</h2>
+
+  <p>核心想法：<strong>把 prices.db 按年切成 4 个文件 + 一个 core 包</strong>。历史分片发完不再变，只有"hot"那档每周重发。</p>
+
+  <table class="sizes">
+    <thead><tr><th>分片</th><th>raw</th><th>zst -19</th><th>重发</th></tr></thead>
+    <tbody>
+      <tr><td><code>prices_2005-2015.db.zst</code></td><td>924 MB</td><td>~138 MB</td><td>一次性</td></tr>
+      <tr><td><code>prices_2016-2020.db.zst</code></td><td>812 MB</td><td>~121 MB</td><td>一次性</td></tr>
+      <tr><td><code>prices_2021-2024.db.zst</code></td><td>975 MB</td><td>~145 MB</td><td>一次性</td></tr>
+      <tr><td><code>prices_2025-2026.db.zst</code></td><td>360 MB</td><td>~54 MB</td><td><strong>每周（hot）</strong></td></tr>
+      <tr><td><code>core.tar.zst</code>（entities + holdings + wd_cache）</td><td>325 MB</td><td>~50 MB</td><td>跟随 hot</td></tr>
+      <tr><td><strong>合计</strong></td><td>3.5 GB</td><td><strong>~510 MB</strong></td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <div class="example">
+    <span class="label">朋友首次拉数据</span>
+    <code>git clone …</code> → <code>uv sync</code> → <code>python scripts/migrate.py</code> →
+    <code>python run.py snapshot pull</code>（下载 5 个 zst，本地解压 + ATTACH 合并回单个 prices.db） →
+    <code>python run.py up</code>。整套流程 100 Mbps 上约 5-8 分钟。
+  </div>
+
+  <p>之后每周（见姊妹设计 <a href="../periodic-etl-refresh/index.html">ETL 周度刷新</a>）GitHub Actions 自动重打 hot 那 ~54 MB，朋友本地 cron 拉新 hot 即可跟上数据。</p>
+
+  <p><strong>关键点：运行时代码完全没动。</strong> ATTACH 只在一次性的打包 / 合并脚本里用，
+  跑完即关；线上服务依旧是单个 <code>prices.db</code>，守住 CLAUDE.md "5 库不 ATTACH" 的约定。</p>
+
+  <h2>决策与原因</h2>
+  <ul>
+    <li><strong>prices.db 全保留，不瘦身</strong>。代码现在只查 <code>SELECT close … LIMIT 1</code>，理论可瘦 99% 至 &lt;10 MB；但为未来 K 线视图保留扩展空间。</li>
+    <li><strong>按年分片，不是按市场或哈希</strong>。年片是唯一支持"历史不变 + 只重传 hot"的策略，把每周分发量从 ~510 MB 压到 ~54 MB。</li>
+    <li><strong>zstd -19 而非 gzip</strong>。同样 74 MB 输入，gzip 出 16.9 MB，zstd 出 11 MB（再省 30%）。压缩时间 5s vs 26s 都在容忍范围。</li>
+    <li><strong>GitHub Release 当托管</strong>，不要对象存储。仓库已有、免费、私有也支持、单文件 2 GB 上限够用。</li>
+    <li><strong><code>meta.db</code> 不分发</strong>。<code>etl_progress</code> / <code>dead_letter</code> 是本机私有进度，新用户从空开始。</li>
+  </ul>
+
+  <h2>验证过什么</h2>
+  <ul>
+    <li>切 2026 年片：810k 行 11.6 秒切出 74 MB raw → zstd -19 11 MB（14.9% 压缩率）。</li>
+    <li>合并链路：<code>zstd -d</code> + <code>ATTACH + INSERT OR REPLACE</code> 把 810k 行合进空 db 用 0.8 秒。查询结果（sh600004 close ≤ 2026-06-01 = 8.52）和源 db 字字一致。</li>
+    <li>外推全分发：4 个年片 + core ≈ 510 MB，每个文件远小于 GitHub Release 单文件 2 GB 上限。</li>
+  </ul>
+
+  <h2>遗留风险</h2>
+  <ul>
+    <li>历史分片"永不变"假设依赖 AKShare 不修复历史数据；理论上偶有 ~5 万行少量修正，需要时重发也只是 138 MB 上传 30 秒。</li>
+    <li>GitHub CDN 国内速度不稳；510 MB 首次下载 1-7 分钟内可接受。真痛了再加七牛 / R2 镜像。</li>
+    <li>2027 年 hot 跨年滚动需要本人手动跑一次 <code>python run.py snapshot roll-year</code>；GH Actions 不感知跨年。</li>
+  </ul>
+
+  <div class="footer">
+    这是摘要版。实现细节、完整决策日志和构建计划见
+    <a href="../../agents/db-snapshot-distribution/design.md"><code>docs/designs/agents/db-snapshot-distribution/design.md</code></a>。
+  </div>
+</main>
+</body>
+</html>

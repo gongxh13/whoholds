@@ -7,11 +7,14 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 backend/data/
+backend/snapshot/
 
 # Node
 node_modules/
 dist/
 .vite/
+frontend/test-results/
+frontend/playwright-report/
 
 # OS
 .DS_Store

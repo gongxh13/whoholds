@@ -1,0 +1,82 @@
+name: weekly snapshot refresh
+
+# Pulls the previous snapshot from the `data-snapshot` release, runs an
+# incremental ETL, rebuilds the hot prices shard + core tarball, and
+# clobbers the release attachments with the fresh artifacts.
+#
+# Design: docs/designs/agents/periodic-etl-refresh/design.md
+
+on:
+  schedule:
+    # Every Monday 13:00 UTC = 21:00 Asia/Shanghai (post-close).
+    - cron: '0 13 * * 1'
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: 'prices window in days'
+        required: false
+        default: '14'
+      concurrency:
+        description: 'parallel fetchers'
+        required: false
+        default: '6'
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TZ: Asia/Shanghai
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install zstd
+        run: sudo apt-get update && sudo apt-get install -y zstd
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+          enable-cache: true
+
+      - name: install backend deps (with etl extras)
+        working-directory: backend
+        run: uv sync --extra etl
+
+      - name: ensure data dir + schemas
+        working-directory: backend
+        run: uv run python scripts/migrate.py
+
+      - name: pull previous snapshot from release
+        run: python run.py snapshot pull
+
+      - name: run incremental ETL
+        run: |
+          python run.py refresh \
+            --days-back "${{ github.event.inputs.days_back || '14' }}" \
+            --concurrency "${{ github.event.inputs.concurrency || '6' }}"
+        timeout-minutes: 150
+
+      - name: rebuild hot shard + core
+        run: python run.py snapshot build --hot
+
+      - name: upload to release (clobber)
+        run: |
+          set -e
+          for asset in backend/snapshot/prices_*.db.zst backend/snapshot/core.tar.zst; do
+            for attempt in 1 2 3; do
+              if gh release upload data-snapshot "$asset" --clobber; then
+                echo "uploaded $asset"
+                break
+              fi
+              echo "upload of $asset failed (attempt $attempt), retrying in 30s"
+              sleep 30
+            done
+          done
+
+      - name: report sizes
+        if: always()
+        run: ls -lh backend/snapshot/ || true

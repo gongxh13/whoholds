@@ -30,20 +30,37 @@ docker compose up -d --build
 - `backend` — FastAPI + APScheduler（数据存 named volume `whoholds_data`）
 - `caddy` — 反向代理 + basic auth + 静态前端
 
-### 3. 首次 bootstrap 数据
+### 3. 首次种数据
 
-容器跑起来是空库，要手动触发一次全量抓取：
+容器跑起来是空库，**推荐**从 GitHub Release 拉打包好的快照（~510 MB，5-10 分钟）：
+
+```bash
+docker compose exec backend python /app/scripts/restore_snapshot.py --repo <owner>/whoholds
+```
+
+如果环境不通 GitHub，或者你就是上传方，回退到本地全量抓取：
 
 ```bash
 docker compose exec backend python -m app.etl.bootstrap
 # ≈6 小时：teamwork (35min) + ingest + disambiguate + top10 + prices + wikidata
 ```
 
-之后每天 02:00 / 04:00 / 18:00 由容器内 APScheduler 自动增量。
-
 > ⚠️ bootstrap 需要外网通到 AKShare（data.eastmoney.com）和 Wikidata。
 > design.md §抓取细节 提到 push2his.eastmoney.com 子域被 GFW 截断，
 > 已用腾讯源（`stock_zh_a_hist_tx`）规避。
+
+### 3.5 周度数据刷新
+
+**生产部署不要靠容器内 APScheduler 维护数据保鲜。** 权威数据由 GitHub Actions
+每周一 21:00（北京）自动产出，重切 hot 分片后覆盖式上传到 release。
+设计：[`docs/designs/agents/periodic-etl-refresh/design.md`](../docs/designs/agents/periodic-etl-refresh/design.md)。
+
+生产机加一个 crontab 拉新 hot 即可：
+
+```cron
+# 每周二 09:00 北京时间拉最新 hot 进容器
+0 9 * * 2  docker compose exec backend python /app/scripts/restore_snapshot.py --hot --repo <owner>/whoholds
+```
 
 ### 4. 日常运维
 
@@ -63,6 +80,6 @@ for r in c.execute('SELECT * FROM alert ORDER BY id DESC LIMIT 20'):
 
 ## 注意事项
 
-- **APScheduler 在 backend 容器里跑** — 不要再起一个 worker；single-instance + `coalesce` 在 design.md §调度 已说明。
+- **APScheduler 仍在 backend 容器里**，但**不再是**周度刷新的承运方 —— GitHub Actions 接管了那条线（见上方 §3.5）。容器内的 scheduler 现在主要用于"开发期手动起 backend 顺便补数据"以及临时灾备。
 - **SQLite 5 库都在 `/data`** — 备份就备份整卷。
 - **不要**开放 8000 端口到公网，所有访问必须经过 Caddy basic auth。

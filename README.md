@@ -15,13 +15,15 @@ A 股上市公司前十大股东网络与时间线分析工具。
 ```bash
 python run.py install          # uv sync (含 etl extras) + pnpm install
 python run.py migrate          # 建 5 个空 SQLite
-python run.py bootstrap        # ≈6 小时：从 AKShare / Wikidata 真抓全市场
+python run.py snapshot pull    # 从 GitHub Release 拉数据（推荐：~10 分钟）
 python run.py dev              # 并发起后端 8000 + 前端 5174，Ctrl-C 一起退
 ```
 
-> 不想等 6 小时？先跑 `migrate` + `dev`，UI 会以空状态启动（health 全绿、列表为空）；
-> 后台 APScheduler 会按 cron 慢慢增量补，或挑几只关心的股票手动跑
-> `app.etl.pull_top10.pull_one(...)`。
+> **不想 / 没条件用 release 数据**？把 `snapshot pull` 换成 `python run.py bootstrap`
+> 跑 ≈6 小时本地全量；或者跳过直接 `dev`，UI 会以空状态启动（health 全绿、列表为空）。
+
+**或：** 用 `python run.py snapshot pull --hot` 只拉最近 ~110 MB（hot 年片 + core），
+适合"只看近两年"的开发场景。要历史数据再 `--year-from 2005-2015` 一次性拉齐。
 
 打开 `http://localhost:5174/`。
 
@@ -31,8 +33,22 @@ python run.py dev              # 并发起后端 8000 + 前端 5174，Ctrl-C 一
 python run.py test             # backend pytest + frontend vitest
 python run.py lint             # ruff + biome + tsc
 python run.py clean -y         # 删 backend/data/
+python run.py snapshot --help  # build / pull / roll-year
+python run.py refresh --help   # 周度增量（GH Actions 用，本机也可手跑）
 python run.py --help
 ```
+
+### 数据如何刷新
+
+- **GitHub Actions 每周一 21:00（北京）** 自动跑 `refresh` → 重切 hot 分片 → 覆盖式上传 release。
+  详见 [`docs/designs/agents/periodic-etl-refresh/design.md`](docs/designs/agents/periodic-etl-refresh/design.md)。
+- **朋友本地跟新**：每周二早上跑一次（macOS / Linux crontab）：
+  ```cron
+  0 9 * * 2  cd ~/whoholds && python run.py snapshot pull --hot
+  ```
+- **首次种数据**（仅 owner，一次性）：本机跑 `python run.py snapshot build --all`
+  切出 5 个 zst，然后 `gh release create data-snapshot backend/snapshot/*.zst`。
+  之后 Actions 自动维护 hot + core 两个 attachment。
 
 > Windows 用户：上述命令直接在 PowerShell / cmd 里 `python run.py ...` 跑就行；
 > 不需要 WSL 或 Make。

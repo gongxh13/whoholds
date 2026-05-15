@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -22,6 +24,9 @@ from app.etl.common import (
     record_progress,
     write_db,
 )
+
+# SQLite write fan-in: serialize commits from concurrent fetchers.
+_write_lock = threading.Lock()
 
 JOB = "pull_prices"
 
@@ -68,21 +73,22 @@ def pull_one(
             for adjust in ("", "qfq")
         }
     except Exception as exc:  # noqa: BLE001
-        dead_letter(JOB, key, "", str(exc))
-        status = JobStatus(JOB, key, "error", str(exc))
-        record_progress(status)
+        with _write_lock:
+            dead_letter(JOB, key, "", str(exc))
+            status = JobStatus(JOB, key, "error", str(exc))
+            record_progress(status)
         return status
 
-    conn = write_db("prices")
-    try:
-        for adjust, df in dfs.items():
-            _upsert(conn, stock_code, adjust, df)
-        conn.commit()
-    finally:
-        conn.close()
-
-    status = JobStatus(JOB, key, "ok")
-    record_progress(status)
+    with _write_lock:
+        conn = write_db("prices")
+        try:
+            for adjust, df in dfs.items():
+                _upsert(conn, stock_code, adjust, df)
+            conn.commit()
+        finally:
+            conn.close()
+        status = JobStatus(JOB, key, "ok")
+        record_progress(status)
     return status
 
 
@@ -110,14 +116,33 @@ def _upsert(conn: sqlite3.Connection, stock_code: str, adjust: str, df) -> None:
     )
 
 
-def pull_market(stock_codes: Iterable[str], **kwargs) -> int:
+def pull_market(stock_codes: Iterable[str], *, concurrency: int = 6, **kwargs) -> int:
+    """Pull many stocks in parallel.
+
+    Default 6 workers — Tencent / Eastmoney happily serve ~8 concurrent; we
+    stay conservative. Use concurrency=1 to keep the old serial behavior.
+    """
+    codes = list(stock_codes)
+    if concurrency <= 1:
+        n_ok = 0
+        for code in codes:
+            try:
+                if pull_one(code, **kwargs).status == "ok":
+                    n_ok += 1
+            except Exception as exc:  # noqa: BLE001
+                alert("warn", JOB, f"{code}: {exc}")
+        return n_ok
+
     n_ok = 0
-    for code in stock_codes:
-        try:
-            if pull_one(code, **kwargs).status == "ok":
-                n_ok += 1
-        except Exception as exc:  # noqa: BLE001
-            alert("warn", JOB, f"{code}: {exc}")
+    with ThreadPoolExecutor(max_workers=concurrency) as ex:
+        futs = {ex.submit(pull_one, code, **kwargs): code for code in codes}
+        for fut in as_completed(futs):
+            code = futs[fut]
+            try:
+                if fut.result().status == "ok":
+                    n_ok += 1
+            except Exception as exc:  # noqa: BLE001
+                alert("warn", JOB, f"{code}: {exc}")
     return n_ok
 
 

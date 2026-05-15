@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETL 周度自动刷新 — 设计摘要</title>
+<style>
+  :root { --fg:#1a1a1a; --muted:#666; --line:#e3e3e3; --accent:#2563eb; --bg:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e8e8e8; --muted:#9a9a9a; --line:#333; --accent:#6ea8fe; --bg:#161616; }
+  }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--fg); margin:0; padding:48px 20px;
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; }
+  main { max-width:760px; margin:0 auto; }
+  h1 { font-size:1.7rem; margin:0 0 .35em; line-height:1.25; }
+  h2 { font-size:.82rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+    margin:2.3em 0 .55em; }
+  p { margin:.6em 0; }
+  .meta { color:var(--muted); font-size:.92rem; margin-bottom:1.6em; }
+  .badge { display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; padding:.18em .55em; border-radius:4px; vertical-align:middle; }
+  .badge.validated   { background:#dcfce7; color:#166534; }
+  .badge.implemented { background:#dbeafe; color:#1e40af; }
+  .badge.abandoned   { background:#fee2e2; color:#991b1b; }
+  @media (prefers-color-scheme: dark) {
+    .badge.validated   { background:#14532d; color:#bbf7d0; }
+    .badge.implemented { background:#1e3a8a; color:#bfdbfe; }
+    .badge.abandoned   { background:#7f1d1d; color:#fecaca; }
+  }
+  ul { padding-left:1.25em; margin:.5em 0; }
+  li { margin:.35em 0; }
+  a { color:var(--accent); }
+  code { background:rgba(127,127,127,.16); padding:.1em .35em; border-radius:3px; font-size:.9em; }
+  ol.howto { padding-left:1.4em; margin:.7em 0; }
+  ol.howto li { margin:.5em 0; }
+  figure.diagram { margin:1.5em 0; text-align:center; overflow-x:auto; }
+  figure.diagram svg { max-width:100%; height:auto; display:block; margin:0 auto; }
+  figure.diagram figcaption { color:var(--muted); font-size:.85rem; margin-top:.5em; }
+  .example { border-left:3px solid var(--accent); background:rgba(127,127,127,.07);
+    padding:.7em 1em; border-radius:0 6px 6px 0; margin:1.2em 0; }
+  .example .label { display:block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--muted); margin-bottom:.3em; }
+  .footer { margin-top:3em; padding-top:1.1em; border-top:1px solid var(--line);
+    color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ETL 周度自动刷新 <span class="badge validated">validated</span></h1>
+  <div class="meta">
+    验证于 2026-05-15 · 由一次 <code>/spike</code> 而来 · 与
+    <a href="../db-snapshot-distribution/index.html">数据库快照分发</a> 配套 ·
+    完整细节见 <a href="../../agents/periodic-etl-refresh/design.md">agent 设计文档</a>
+  </div>
+
+  <h2>这是什么</h2>
+  <p>让数据每周自动刷新，<strong>完全不依赖任何人本机开机</strong>。
+  GitHub Actions runner 每周一晚上自动跑增量 ETL，重切 hot 分片，覆盖式上传到固定 Release tag。
+  朋友本地 cron 拉新 hot 就跟得上。</p>
+
+  <h2>怎么工作</h2>
+
+  <p>整条流水线一周一次自动跑：</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 240" role="img" aria-label="周度刷新流水线" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#6ea8fe"/>
+        </marker>
+        <style>
+          .box { fill: rgba(127,127,127,.08); stroke: #6ea8fe; stroke-width: 1.4; rx: 6; }
+          .label { font: 13px -apple-system, "PingFang SC", sans-serif; fill: currentColor; }
+          .small { font: 11px -apple-system, "PingFang SC", sans-serif; fill: #8a8a8a; }
+          .accent { font-weight: 700; fill: #6ea8fe; }
+          .edge { stroke: #6ea8fe; stroke-width: 1.4; fill: none; }
+        </style>
+      </defs>
+
+      <text x="340" y="20" text-anchor="middle" class="label accent">每周一 21:00 北京 · GitHub Actions</text>
+
+      <rect class="box" x="20" y="40" width="140" height="50"/>
+      <text x="90" y="62" text-anchor="middle" class="label">pull old snapshot</text>
+      <text x="90" y="78" text-anchor="middle" class="small">~510 MB 下载</text>
+
+      <line class="edge" x1="160" y1="65" x2="200" y2="65" marker-end="url(#arrow)"/>
+
+      <rect class="box" x="200" y="40" width="140" height="50"/>
+      <text x="270" y="62" text-anchor="middle" class="label">incremental ETL</text>
+      <text x="270" y="78" text-anchor="middle" class="small">~45 min 并发跑</text>
+
+      <line class="edge" x1="340" y1="65" x2="380" y2="65" marker-end="url(#arrow)"/>
+
+      <rect class="box" x="380" y="40" width="140" height="50"/>
+      <text x="450" y="62" text-anchor="middle" class="label">build --hot</text>
+      <text x="450" y="78" text-anchor="middle" class="small">重切 ~54 MB zst</text>
+
+      <line class="edge" x1="520" y1="65" x2="560" y2="65" marker-end="url(#arrow)"/>
+
+      <rect class="box" x="560" y="40" width="100" height="50"/>
+      <text x="610" y="62" text-anchor="middle" class="label">release</text>
+      <text x="610" y="78" text-anchor="middle" class="small">upload --clobber</text>
+
+      <line class="edge" x1="610" y1="90" x2="610" y2="140" marker-end="url(#arrow)"/>
+
+      <rect class="box" x="510" y="140" width="160" height="50" style="stroke: #aaa;"/>
+      <text x="590" y="162" text-anchor="middle" class="label">朋友本地 cron</text>
+      <text x="590" y="178" text-anchor="middle" class="small">snapshot pull --hot</text>
+
+      <text x="340" y="220" text-anchor="middle" class="small">本机休假关机也不影响 · 失败 GitHub 默认邮件告警</text>
+    </svg>
+    <figcaption>每周一次：拉旧 snapshot → 跑增量 ETL → 重切 hot → 覆盖式发 release</figcaption>
+  </figure>
+
+  <p><strong>关键架构选择：GitHub Actions 是唯一 ETL 权威。</strong> 本机也走 <code>snapshot pull</code> 拿数据，
+  和朋友一样是消费者。这样消除了"我休假 → 朋友数据停更"的风险，也把流水线变得显式可观察。</p>
+
+  <h2>决策与原因</h2>
+  <ul>
+    <li><strong>触发器选 GitHub Actions，不是本机 cron / launchd</strong>。launchd 关机就不跑；APScheduler 还要求 backend 跑着；GH Actions 完全云端，没有任何本机依赖。</li>
+    <li><strong>每周一次，不是每天</strong>。A 股财报披露不天天有；daily prices 7 天份一次拉齐就够；GH Actions free tier 配额也省。</li>
+    <li><strong>权威在 GH Actions，不是本机</strong>。代价是本机看数据也要先 <code>snapshot pull</code>，但消除"我关机一周数据停更"的脆弱性。</li>
+    <li><strong>Release attachment 当数据持久层，不是 GH Actions cache</strong>。cache 5 GB / 7 天 evict 不可靠；Release 永久持有，且本来就是朋友拉数据的通道，复用一个。</li>
+    <li><strong>固定 release tag (<code>data-snapshot</code>) 覆盖式更新</strong>，不每周新建 tag。朋友 cron 命令永不变。</li>
+  </ul>
+
+  <h2>验证过什么</h2>
+  <ul>
+    <li><strong>海外出口可达</strong>：实测走 127.0.0.1:7897 境外代理拉 sh600004 最近 7 天 K 线，<strong>完整 7 行返回</strong>。push2his.eastmoney.com 海外可达，GH Actions Azure 出口同理可通。</li>
+    <li><strong>耗时可控</strong>：单股 daily prices 增量 ~1.07 秒（境外代理实测，6 个样本平均）。外推串行总时长 ~4.5 小时，在 GH Actions 6 小时 timeout 内；加 4-8 并发可压到 ~45 分钟。</li>
+    <li><strong>免费配额够用</strong>：预期每月 ~260 分钟，GH Free private repo 2000 min/月留有充分余量。</li>
+  </ul>
+
+  <h2>遗留风险</h2>
+  <ul>
+    <li>AKShare 库无 SLA，某周接口换了 / 限频炸了下周再补即可，数据延期一周对朋友圈场景无影响。GH Actions 失败默认发邮件给 owner，可观察。</li>
+    <li><strong>首次种数据必须本机手动一次</strong>：跑 <code>snapshot build --all</code> + <code>gh release create data-snapshot ...</code>。Actions 第一跑要能拉到有效 baseline。</li>
+    <li>跨年 hot 滚动（2026 → 2027）需要本人 12/31 → 1/1 手动跑一次 <code>snapshot roll-year</code>；Actions 不感知跨年。</li>
+    <li>实施时要给 <code>pull_market</code> 加 ThreadPoolExecutor 并发（4-8 worker），否则单跑 4.5 小时虽在 timeout 内但浪费配额。</li>
+  </ul>
+
+  <div class="footer">
+    这是摘要版。完整 workflow 文件、<code>run.py refresh</code> 入口实现、并发改造细节和构建计划见
+    <a href="../../agents/periodic-etl-refresh/design.md"><code>docs/designs/agents/periodic-etl-refresh/design.md</code></a>。
+  </div>
+</main>
+</body>
+</html>
