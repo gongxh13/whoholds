@@ -84,16 +84,17 @@ Compose 自带 Caddy basic auth，开箱即用。详细见 [`deploy/README.md`](
 # 1. 生成 basic auth 凭据
 docker run --rm caddy:2.8-alpine caddy hash-password
 
-# 2. 写 .env
-cat > .env <<EOF
-WHOHOLDS_USER=team
-WHOHOLDS_PASS_HASH=<上一步的哈希>
-EOF
+# 2. 写 deploy/docker/.env (compose 文件就在该目录)
+cp .env.example deploy/docker/.env
+# 编辑 deploy/docker/.env，把 WHOHOLDS_PASS_HASH 替换为上一步的哈希
 
-# 3. 起容器
+# 3. 起容器（推荐用 run.py 包装）
+python run.py setup --docker     # build + 起容器 + 容器内拉 release 数据
+python run.py up --docker        # 起容器（数据已就绪时）
+
+# 等价的纯 docker 命令：
+cd deploy/docker
 docker compose up -d --build
-
-# 4. 容器内拉 Release 数据
 docker compose exec backend python /app/scripts/restore_snapshot.py --repo gongxh13/whoholds
 ```
 

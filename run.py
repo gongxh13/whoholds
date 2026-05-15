@@ -38,6 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
+COMPOSE_DIR = ROOT / "deploy" / "docker"
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
@@ -71,23 +72,22 @@ def _setup_source(args: argparse.Namespace) -> int:
 
 
 def _setup_docker(args: argparse.Namespace) -> int:
-    env_file = ROOT / ".env"
+    env_file = COMPOSE_DIR / ".env"
     if not env_file.exists():
-        print(">> .env not found — generate basic-auth credentials first:")
+        print(f">> {env_file} not found — generate basic-auth credentials first:")
+        print("   cp .env.example deploy/docker/.env")
         print("   docker run --rm caddy:2.8-alpine caddy hash-password")
-        print("   then create .env with:")
-        print("     WHOHOLDS_USER=<user>")
-        print("     WHOHOLDS_PASS_HASH=<hash>")
+        print("   # paste the hash into deploy/docker/.env as WHOHOLDS_PASS_HASH")
         return 1
     print(">> [1/2] docker compose build")
-    if _run(["docker", "compose", "build"], cwd=ROOT):
+    if _run(["docker", "compose", "build"], cwd=COMPOSE_DIR):
         return 1
     if args.skip_data:
         print(">> [2/2] snapshot pull SKIPPED. Start containers with `python run.py up --docker`")
         print("       then `docker compose exec backend python /app/scripts/restore_snapshot.py --repo <owner>/whoholds`")
         return 0
     print(">> [2/2] starting containers + pulling snapshot inside backend")
-    if _run(["docker", "compose", "up", "-d"], cwd=ROOT):
+    if _run(["docker", "compose", "up", "-d"], cwd=COMPOSE_DIR):
         return 1
     pull_cmd = ["docker", "compose", "exec", "backend",
                 "python", "/app/scripts/restore_snapshot.py"]
@@ -95,19 +95,19 @@ def _setup_docker(args: argparse.Namespace) -> int:
         pull_cmd += ["--repo", args.repo]
     if args.hot:
         pull_cmd += ["--hot"]
-    return _run(pull_cmd, cwd=ROOT)
+    return _run(pull_cmd, cwd=COMPOSE_DIR)
 
 
 def cmd_up(args: argparse.Namespace) -> int:
     """Start dev servers (source) or docker compose (docker)."""
     if args.mode == "docker":
-        rc = _run(["docker", "compose", "up", "-d"], cwd=ROOT)
+        rc = _run(["docker", "compose", "up", "-d"], cwd=COMPOSE_DIR)
         if rc == 0:
             print()
             print("  containers started in detached mode")
             print("  open http://localhost/  (Caddy basic-auth)")
-            print("  logs:   docker compose logs -f")
-            print("  stop:   docker compose down")
+            print("  logs:   cd deploy/docker && docker compose logs -f")
+            print("  stop:   cd deploy/docker && docker compose down")
         return rc
     return cmd_dev(args)
 

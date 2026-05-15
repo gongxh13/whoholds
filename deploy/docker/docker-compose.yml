@@ -1,9 +1,14 @@
-version: "3.9"
+name: whoholds
+
+# Compose file lives at deploy/docker/docker-compose.yml.
+# Relative paths below resolve from this file's directory (../../ = repo root).
+# `.env` is expected in this same directory (deploy/docker/.env); copy
+# ../../.env.example as a template, or pass `--env-file <path>` to docker compose.
 
 services:
   backend:
     build:
-      context: ./backend
+      context: ../../backend
     image: whoholds-backend:latest
     restart: unless-stopped
     environment:
@@ -21,7 +26,7 @@ services:
 
   caddy:
     build:
-      context: ./frontend
+      context: ../../frontend
     image: whoholds-frontend:latest
     restart: unless-stopped
     depends_on:
@@ -32,7 +37,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
 

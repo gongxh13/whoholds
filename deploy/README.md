@@ -13,17 +13,23 @@ docker run --rm caddy:2.8-alpine caddy hash-password
 # 输入密码 → 得到 $2a$14$... 哈希
 ```
 
-写入 `.env`：
+写入 `deploy/docker/.env`（compose 文件就在该目录，默认读取本目录的 `.env`）：
 
 ```env
 WHOHOLDS_USER=team
 WHOHOLDS_PASS_HASH=$2a$14$...
 ```
 
+（仓库根目录有 `.env.example` 可作模板：`cp .env.example deploy/docker/.env` 再改）
+
 ### 2. 启动
 
 ```bash
-docker compose up -d --build
+# 推荐：通过 run.py 包装（自动 cd 到 deploy/docker）
+python run.py up --docker
+
+# 或手动：
+cd deploy/docker && docker compose up -d --build
 ```
 
 容器：
