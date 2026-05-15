@@ -1,7 +1,21 @@
 [project]
 name = "whoholds-backend"
 version = "0.1.0"
-description = "A-share top-10 shareholder network — backend"
+description = "A-share top-10 shareholder network analyzer — backend"
+readme = "../README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "alex.chen7ac", email = "alex.chen7ac@gmail.com" },
+]
+keywords = ["a-share", "shareholder-network", "fastapi", "sqlite", "akshare"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Database",
+]
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
@@ -11,6 +25,11 @@ dependencies = [
     "tenacity>=9.0",
     "apscheduler>=3.10",
 ]
+
+[project.urls]
+Homepage = "https://github.com/gongxh13/whoholds"
+Repository = "https://github.com/gongxh13/whoholds"
+Issues = "https://github.com/gongxh13/whoholds/issues"
 
 [project.optional-dependencies]
 # `pip install .[etl]` (or `uv sync --extra etl`) — pulls akshare for ETL only.

@@ -8,11 +8,21 @@ A 股上市公司前十大股东网络与时间线分析工具。**唯一权威�
 [`docs/designs/agents/shareholder-network/design.md`](docs/designs/agents/shareholder-network/design.md) —
 任何架构 / 数据模型 / API contract / 算法层面的问题，先读它。
 
-## Scope & 安全约束（不要破坏）
+## Scope & 风险约束（不要破坏）
 
-工具面向 **小团队 / 朋友圈** 使用。不部署到公网。整合后的个人身份不能展示给陌生人 ——
-凡是会暴露 "某个人在多家公司持股" 拓扑的 endpoint / 页面，访问层（PR 11 Caddy basic auth）必须在位。
-原因：消歧不可能 100% 准确，公网误识别 = 名誉风险 + 合规风险。
+**开源工具**（MIT），任何人可 clone / fork / 部署。原始持股数据本身就是公开披露的（上市公司
+top10 强制披露），代码读 AKShare 公开源。
+
+**真正的风险点是 Layer 2 同名消歧的 false-positive** —— 算法把多家公司里的"张三"
+判为同一人，可能是错的。把"系统判断的人物聚合"展示出去，错判时名誉责任归发布者。
+所以：
+- README 必须保留"消歧 false-positive 免责"段，发布前所有用户能看到。
+- 任何用户标注 (`user_annotation`) 必须有 audit trail（`who/op/payload/ts`），已经在
+  `entities.user_annotation` 表里；不要拆。
+- 后端 `_auth.py` env-gated basic auth 保留作为**可选** hardening，但不强制 —— 开源
+  实例随你公网部署，basic auth 由部署者自己决定开不开。
+- Docker Compose 的 Caddy basic auth (`deploy/Caddyfile`) 同上：默认配好、便于使用者
+  开箱即用，不强制。
 
 ## Project layout
 
@@ -66,7 +76,10 @@ pnpm install --frozen-lockfile
 ```
 
 DB 路径可通过 `WHOHOLDS_DATA_DIR` 环境变量覆盖（测试就这么做的）。
-**测试时务必** `WHOHOLDS_DISABLE_SCHEDULER=1`，否则 lifespan 会启动 APScheduler。
+
+**APScheduler 默认关闭**（GH Actions 是数据权威）。开发期需要本机自己跑增量 ETL 时设
+`WHOHOLDS_ENABLE_SCHEDULER=1`。`WHOHOLDS_DISABLE_SCHEDULER=1` 旧 env 保留兼容（强制关闭，
+覆盖 enable）。
 
 ## Running tests  ✅ verified 2026-05-14
 
@@ -132,7 +145,12 @@ curl --noproxy '*' http://localhost:5174/api/health
 
 ## Build & misc
 
-- **不要**部署到公网（重申）。生产形态：Docker Compose + Caddy basic auth，单机 2C2G（PR 11）。
-- **没有 CI**：PR 之前自己跑齐 `uv run pytest` + `uv run ruff check` + `pnpm check` + `pnpm build`。
+- **生产形态**：Docker Compose + Caddy（默认 basic auth），单机 2C2G。开源后任何人都可部署，
+  basic auth 由部署者自行选择是否开启。
+- **GH Actions 是 ETL 权威**：见 `docs/designs/agents/periodic-etl-refresh/design.md`。本地
+  APScheduler 默认**关闭**，需要本机自己跑增量时再 `WHOHOLDS_ENABLE_SCHEDULER=1`。这是为了
+  避免本地数据和 release 数据 diverge（详见同设计 doc §模型 1）。
+- **CI**：`.github/workflows/weekly-refresh.yml` 跑 ETL + 发 release。PR 前手动跑齐
+  `uv run pytest` + `uv run ruff check` + `pnpm check` + `pnpm build`。
 - **设计文档优先**：`docs/designs/agents/shareholder-network/design.md` 是 12 PR 的实现计划 +
   spike 决策日志 + 同名消歧 / 数据模型 / API 全集。`docs/designs/humans/...` 是给人看的摘要 HTML。

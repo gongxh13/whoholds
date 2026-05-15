@@ -8,6 +8,8 @@ Usage:
     python run.py <command> [args...]
 
 Commands:
+    setup          one-shot: install deps + create DBs + pull data snapshot
+    up             start the backend + frontend (or docker compose)
     install        uv sync (+ etl extras) and pnpm install
     migrate        create the 5 empty SQLite files
     bootstrap      real-data ETL pull from AKShare etc. (≈6h, network-bound)
@@ -17,7 +19,11 @@ Commands:
     clean          drop generated DBs (asks for confirmation)
     snapshot       build / pull data snapshot artifacts (see `snapshot --help`)
     refresh        run incremental ETL (used by the weekly GitHub Actions workflow)
+    backfill       pull pull_top10 over a historic year range (resumable)
     help           print this help
+
+Quick start (source):    python run.py setup && python run.py up
+Quick start (docker):    python run.py setup --docker && python run.py up --docker
 """
 from __future__ import annotations
 
@@ -32,6 +38,78 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """One-shot setup: install deps, build DBs, pull snapshot."""
+    if args.mode == "docker":
+        return _setup_docker(args)
+    return _setup_source(args)
+
+
+def _setup_source(args: argparse.Namespace) -> int:
+    print(">> [1/3] install deps (uv + pnpm)")
+    if cmd_install(args):
+        return 1
+    print(">> [2/3] migrate (create empty SQLite files)")
+    if cmd_migrate(args):
+        return 1
+    if args.skip_data:
+        print(">> [3/3] snapshot pull SKIPPED (--skip-data); run `python run.py snapshot pull` later")
+        return 0
+    print(">> [3/3] snapshot pull (download release data, ~5-10 min)")
+    pull_cmd = ["uv", "run", "python", "scripts/restore_snapshot.py"]
+    if args.repo:
+        pull_cmd += ["--repo", args.repo]
+    if args.hot:
+        pull_cmd += ["--hot"]
+    rc = _run(pull_cmd, cwd=BACKEND)
+    if rc != 0:
+        print("\nWARN: snapshot pull failed — UI still runs with empty DBs.")
+        print("       Re-run later with: python run.py snapshot pull")
+    return 0
+
+
+def _setup_docker(args: argparse.Namespace) -> int:
+    env_file = ROOT / ".env"
+    if not env_file.exists():
+        print(">> .env not found — generate basic-auth credentials first:")
+        print("   docker run --rm caddy:2.8-alpine caddy hash-password")
+        print("   then create .env with:")
+        print("     WHOHOLDS_USER=<user>")
+        print("     WHOHOLDS_PASS_HASH=<hash>")
+        return 1
+    print(">> [1/2] docker compose build")
+    if _run(["docker", "compose", "build"], cwd=ROOT):
+        return 1
+    if args.skip_data:
+        print(">> [2/2] snapshot pull SKIPPED. Start containers with `python run.py up --docker`")
+        print("       then `docker compose exec backend python /app/scripts/restore_snapshot.py --repo <owner>/whoholds`")
+        return 0
+    print(">> [2/2] starting containers + pulling snapshot inside backend")
+    if _run(["docker", "compose", "up", "-d"], cwd=ROOT):
+        return 1
+    pull_cmd = ["docker", "compose", "exec", "backend",
+                "python", "/app/scripts/restore_snapshot.py"]
+    if args.repo:
+        pull_cmd += ["--repo", args.repo]
+    if args.hot:
+        pull_cmd += ["--hot"]
+    return _run(pull_cmd, cwd=ROOT)
+
+
+def cmd_up(args: argparse.Namespace) -> int:
+    """Start dev servers (source) or docker compose (docker)."""
+    if args.mode == "docker":
+        rc = _run(["docker", "compose", "up", "-d"], cwd=ROOT)
+        if rc == 0:
+            print()
+            print("  containers started in detached mode")
+            print("  open http://localhost/  (Caddy basic-auth)")
+            print("  logs:   docker compose logs -f")
+            print("  stop:   docker compose down")
+        return rc
+    return cmd_dev(args)
 
 
 def cmd_install(_args: argparse.Namespace) -> int:
@@ -147,6 +225,18 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     return _run(cmd, cwd=BACKEND)
 
 
+def cmd_backfill(args: argparse.Namespace) -> int:
+    """Historic top10 backfill for a year range (resumable)."""
+    cmd = [
+        "uv", "run", "python", "-m", "app.etl.backfill",
+        "--start-year", str(args.start_year),
+        "--end-year", str(args.end_year),
+    ]
+    if args.concurrency is not None:
+        cmd += ["--concurrency", str(args.concurrency)]
+    return _run(cmd, cwd=BACKEND)
+
+
 def cmd_snapshot(args: argparse.Namespace) -> int:
     """Build / pull / roll-year on the distributable data snapshot."""
     if args.snapshot_cmd == "build":
@@ -219,6 +309,8 @@ def _run(cmd: list[str], cwd: Path, env: dict | None = None) -> int:
 
 
 COMMANDS = {
+    "setup": cmd_setup,
+    "up": cmd_up,
     "install": cmd_install,
     "migrate": cmd_migrate,
     "bootstrap": cmd_bootstrap,
@@ -228,6 +320,7 @@ COMMANDS = {
     "clean": cmd_clean,
     "snapshot": cmd_snapshot,
     "refresh": cmd_refresh,
+    "backfill": cmd_backfill,
 }
 
 
@@ -242,6 +335,24 @@ def main(argv: list[str] | None = None) -> int:
         sp = sub.add_parser(name, help=COMMANDS[name].__doc__ or name)
         if name == "clean":
             sp.add_argument("-y", "--yes", action="store_true", help="skip confirmation")
+        elif name == "setup":
+            sp.add_argument("--docker", dest="mode", action="store_const",
+                            const="docker", default="source",
+                            help="docker compose mode (default: source)")
+            sp.add_argument("--source", dest="mode", action="store_const", const="source",
+                            help="source / venv mode (default)")
+            sp.add_argument("--skip-data", action="store_true",
+                            help="install only; don't pull snapshot data")
+            sp.add_argument("--hot", action="store_true",
+                            help="snapshot pull --hot (only ~110MB instead of ~510MB)")
+            sp.add_argument("--repo", default=None,
+                            help="<owner>/<name> for gh release download (default: gh auto-detect)")
+        elif name == "up":
+            sp.add_argument("--docker", dest="mode", action="store_const",
+                            const="docker", default="source",
+                            help="docker compose mode (default: source dev)")
+            sp.add_argument("--source", dest="mode", action="store_const", const="source",
+                            help="source / venv mode (default)")
         elif name == "snapshot":
             snap_sub = sp.add_subparsers(dest="snapshot_cmd", required=True)
             sp_build = snap_sub.add_parser("build", help="produce snapshot zst files in backend/snapshot/")
@@ -266,6 +377,11 @@ def main(argv: list[str] | None = None) -> int:
                             help="prices window in days (default 14)")
             sp.add_argument("--concurrency", type=int, default=None,
                             help="parallel fetchers (default 6; 1 = serial)")
+        elif name == "backfill":
+            sp.add_argument("--start-year", type=int, required=True, help="inclusive")
+            sp.add_argument("--end-year", type=int, required=True, help="inclusive")
+            sp.add_argument("--concurrency", type=int, default=None,
+                            help="parallel fetchers (default 6)")
 
     args = parser.parse_args(argv)
     return COMMANDS[args.command](args)

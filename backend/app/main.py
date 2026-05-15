@@ -11,12 +11,21 @@ from app.api import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start the APScheduler unless WHOHOLDS_DISABLE_SCHEDULER is set.
+    """Start the APScheduler only when explicitly enabled.
 
-    Tests and the dev server typically set the env-var to skip the scheduler;
-    production (PR 11 docker compose) leaves it enabled.
+    Default is **off**: GitHub Actions (see weekly-refresh.yml) is the data
+    authority — local scheduler running on consumer machines would diverge from
+    the release snapshot and cause confusing inconsistencies.
+
+    To run a local ETL pipeline anyway (e.g. development, air-gapped fork), set
+    `WHOHOLDS_ENABLE_SCHEDULER=1`. The legacy `WHOHOLDS_DISABLE_SCHEDULER=1`
+    still forces it off (wins over enable) — kept so existing tests / CI
+    invocations don't break.
     """
-    if os.environ.get("WHOHOLDS_DISABLE_SCHEDULER") != "1":
+    force_off = os.environ.get("WHOHOLDS_DISABLE_SCHEDULER") == "1"
+    explicit_on = os.environ.get("WHOHOLDS_ENABLE_SCHEDULER") == "1"
+
+    if explicit_on and not force_off:
         try:
             from app.etl.scheduler import build_scheduler
 
