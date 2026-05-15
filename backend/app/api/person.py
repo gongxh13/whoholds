@@ -149,6 +149,10 @@ def _load_companies(
     by_company: dict[str, dict] = {}
     total_by_date: dict[str, float] = {}
     for r in rows:
+        # Defensive: legacy ETL (before pull_top10._upsert alignment fix) could
+        # write NULL stock_code/report_date for some holders. Skip these.
+        if r["stock_code"] is None or r["report_date"] is None:
+            continue
         close = _close_on_or_before(r["stock_code"], r["report_date"])
         mv = (r["holdings"] * close) if (close and r["holdings"]) else None
         entry = by_company.setdefault(

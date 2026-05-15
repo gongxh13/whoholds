@@ -25,8 +25,13 @@ def is_person_heuristic(name: str, nature: str | None) -> bool:
 
 
 def market_prefix(code: str) -> str:
-    """Map a raw 6-digit stock code to its prefixed form."""
+    """Map a raw 6-digit stock code to its prefixed form. Idempotent on already-prefixed input."""
     code = code.strip()
+    # Idempotent: if already prefixed, return as-is. Calling market_prefix twice
+    # used to produce 'szsh601360' which silently broke disambiguate's company
+    # lookup (every coholder appeared in 0 companies → every name → all singletons).
+    if code[:2] in ("sh", "sz", "bj"):
+        return code
     if code.startswith(("6", "9")):
         return f"sh{code}"
     if code.startswith(("4", "8", "92")):

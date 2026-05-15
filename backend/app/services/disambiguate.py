@@ -52,7 +52,10 @@ def _peer_companies(
             parts = seg.split("|")
             if not parts or not parts[0].strip():
                 continue
-            full = market_prefix(parts[0])
+            # company_list is produced by ingest_teamwork already with market prefix
+            # (sh/sz/bj). market_prefix() is idempotent so this is safe either way,
+            # but explicit is better than implicit.
+            full = parts[0].strip()
             if full in by_co:
                 by_co[full].add(peer)
     return by_co

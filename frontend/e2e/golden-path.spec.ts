@@ -5,18 +5,24 @@ import { expect, test } from "@playwright/test";
  * and shows the expected empty-state copy when the DB hasn't been bootstrapped.
  * Once a real DB is provisioned, expand these to assert on actual data.
  */
-test("landing shows health + nav", async ({ page }) => {
+test("landing is Discover (跨持股 + 协同对榜)", async ({ page }) => {
   await page.goto("/#/");
-  await expect(page.getByRole("heading", { name: "whoholds" })).toBeVisible();
-  await expect(page.getByText("✓ /api/health = ok")).toBeVisible();
-  await expect(page.getByRole("link", { name: /#\/discover/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /发现/ })).toBeVisible();
+  await expect(page.getByText("跨持股个人股东榜")).toBeVisible();
+  await expect(page.getByText("协同股东对榜")).toBeVisible();
 });
 
-test("discover page renders even on empty DB", async ({ page }) => {
+test("/#/discover renders the same Discover page", async ({ page }) => {
   await page.goto("/#/discover");
-  await expect(page.getByRole("heading", { name: "发现" })).toBeVisible();
-  await expect(page.getByText("跨持股 个人股东榜")).toBeVisible();
-  await expect(page.getByText("协同股东对榜")).toBeVisible();
+  await expect(page.getByText("跨持股个人股东榜")).toBeVisible();
+});
+
+test("status page surfaces 5 DB pills", async ({ page }) => {
+  await page.goto("/#/health");
+  await expect(page.getByText("/api/health = ok")).toBeVisible();
+  for (const db of ["holdings.db", "prices.db", "entities.db", "wd_cache.db", "meta.db"]) {
+    await expect(page.getByText(db)).toBeVisible();
+  }
 });
 
 test("network page accepts focus and renders header", async ({ page }) => {
