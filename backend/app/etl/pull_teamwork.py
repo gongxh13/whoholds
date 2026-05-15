@@ -13,7 +13,13 @@ import time
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from app.etl.common import JobStatus, dead_letter, record_progress, write_db
+from app.etl.common import (
+    JobStatus,
+    already_succeeded,
+    dead_letter,
+    record_progress,
+    write_db,
+)
 
 JOB = "pull_teamwork"
 
@@ -25,8 +31,10 @@ def _fetch(symbol: str = "个人"):
     return ak.stock_gdfx_holding_teamwork_em(symbol=symbol)
 
 
-def pull_full(symbol: str = "个人") -> JobStatus:
+def pull_full(symbol: str = "个人", *, force: bool = False) -> JobStatus:
     key = f"symbol={symbol}"
+    if not force and already_succeeded(JOB, key):
+        return JobStatus(JOB, key, "skipped")
     t0 = time.time()
     try:
         df = _fetch(symbol)

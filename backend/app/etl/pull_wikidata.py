@@ -12,7 +12,14 @@ from collections.abc import Iterable
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from app.etl.common import JobStatus, alert, record_progress, write_db
+from app.etl.common import (
+    JobStatus,
+    alert,
+    already_succeeded,
+    dead_letter,
+    record_progress,
+    write_db,
+)
 
 JOB = "pull_wikidata"
 WD_SEARCH = "https://www.wikidata.org/w/api.php"
@@ -66,7 +73,12 @@ def _sparql(qid: str, client: httpx.Client) -> dict:
     }
 
 
-def pull_one(name: str, client: httpx.Client | None = None) -> JobStatus:
+def pull_one(
+    name: str, client: httpx.Client | None = None, *, force: bool = False
+) -> JobStatus:
+    if not force and already_succeeded(JOB, name):
+        return JobStatus(JOB, name, "skipped")
+
     own_client = client is None
     client = client or httpx.Client()
     try:
@@ -74,7 +86,23 @@ def pull_one(name: str, client: httpx.Client | None = None) -> JobStatus:
             hit = _search(name, client)
         except Exception as exc:  # noqa: BLE001
             alert("warn", JOB, f"search {name}: {exc}")
-            return JobStatus(JOB, name, "error", str(exc))
+            dead_letter(JOB, name, "", str(exc))
+            status = JobStatus(JOB, name, "error", str(exc))
+            record_progress(status)
+            return status
+
+        if hit is not None:
+            try:
+                details = _sparql(hit["id"], client)
+            except Exception as exc:  # noqa: BLE001
+                alert("warn", JOB, f"sparql {name}: {exc}")
+                dead_letter(JOB, name, "", str(exc))
+                status = JobStatus(JOB, name, "error", str(exc))
+                record_progress(status)
+                return status
+        else:
+            details = None
+
         conn = write_db("wd_cache")
         try:
             if hit is None:
@@ -82,28 +110,26 @@ def pull_one(name: str, client: httpx.Client | None = None) -> JobStatus:
                     "INSERT OR REPLACE INTO wd_cache (name, fetched_at) VALUES (?, ?)",
                     (name, int(time.time())),
                 )
-                conn.commit()
-                return JobStatus(JOB, name, "ok")
-            qid = hit["id"]
-            details = _sparql(qid, client)
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO wd_cache
-                    (name, qid, label, description, birth, occupations, employer, zh_wiki, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    name,
-                    qid,
-                    hit.get("label"),
-                    hit.get("description", ""),
-                    details["births"][0] if details["births"] else "",
-                    details["occupations"],
-                    details["employers"],
-                    details["wikis"][0] if details["wikis"] else "",
-                    int(time.time()),
-                ),
-            )
+            else:
+                assert details is not None
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO wd_cache
+                        (name, qid, label, description, birth, occupations, employer, zh_wiki, fetched_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        name,
+                        hit["id"],
+                        hit.get("label"),
+                        hit.get("description", ""),
+                        details["births"][0] if details["births"] else "",
+                        details["occupations"],
+                        details["employers"],
+                        details["wikis"][0] if details["wikis"] else "",
+                        int(time.time()),
+                    ),
+                )
             conn.commit()
         finally:
             conn.close()

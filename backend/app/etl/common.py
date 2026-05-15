@@ -93,7 +93,10 @@ def already_succeeded(job: str, key: str) -> bool:
             "SELECT status FROM etl_progress WHERE job_name = ? AND key = ?",
             (job, key),
         ).fetchone()
-        return bool(row and row[0] == "ok")
+        # "skipped" = recorded as known-incompatible (e.g. data source doesn't
+        # serve this stock). Retrying just burns tenacity wait time, so treat
+        # it as terminal alongside "ok".
+        return bool(row and row[0] in ("ok", "skipped"))
     finally:
         conn.close()
 

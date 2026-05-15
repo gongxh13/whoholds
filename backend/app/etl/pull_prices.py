@@ -54,7 +54,10 @@ def pull_one(
 ) -> JobStatus:
     """Pull non-adjusted + qfq history for one stock."""
     end_date = end_date or _today()
-    key = f"{stock_code}:{start_date}-{end_date}"
+    # Key intentionally excludes end_date — end_date defaults to today() which
+    # changes daily and would invalidate every ok record across midnight. The
+    # (stock_code, start_date) pair is the actual idempotency boundary.
+    key = f"{stock_code}:{start_date}"
     if not force and already_succeeded(JOB, key):
         return JobStatus(JOB, key, "skipped")
 

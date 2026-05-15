@@ -32,29 +32,36 @@ from app.etl import (
 )
 
 
-def run(latest_only: bool = True) -> None:
+def run(latest_only: bool = True, from_step: int = 1) -> None:
     t0 = time.time()
-    print("[bootstrap] step 1/6 — pull_teamwork (~35 min)", flush=True)
-    pull_teamwork.pull_full()
-    print(f"[bootstrap] done in {time.time()-t0:.0f}s", flush=True)
+    if from_step <= 1:
+        print("[bootstrap] step 1/6 — pull_teamwork (~35 min)", flush=True)
+        pull_teamwork.pull_full()
+        print(f"[bootstrap] done in {time.time()-t0:.0f}s", flush=True)
 
-    print("[bootstrap] step 2/6 — ingest_teamwork", flush=True)
-    ingest_teamwork.run()
+    if from_step <= 2:
+        print("[bootstrap] step 2/6 — ingest_teamwork", flush=True)
+        ingest_teamwork.run()
 
-    print("[bootstrap] step 3/6 — disambiguate", flush=True)
-    disambiguate.run()
+    if from_step <= 3:
+        print("[bootstrap] step 3/6 — disambiguate", flush=True)
+        disambiguate.run()
 
-    codes = _stocks_with_appearances()
-    print(f"[bootstrap] step 4/6 — pull_top10 over {len(codes)} stocks", flush=True)
-    dates = pull_top10.quarter_ends()[-1:] if latest_only else pull_top10.quarter_ends()
-    pull_top10.pull_market(codes, dates)
+    if from_step <= 4:
+        codes = _stocks_with_appearances()
+        print(f"[bootstrap] step 4/6 — pull_top10 over {len(codes)} stocks", flush=True)
+        dates = pull_top10.quarter_ends()[-1:] if latest_only else pull_top10.quarter_ends()
+        pull_top10.pull_market(codes, dates)
 
-    print(f"[bootstrap] step 5/6 — pull_prices over {len(codes)} stocks", flush=True)
-    pull_prices.pull_market(codes)
+    if from_step <= 5:
+        codes = _stocks_with_appearances()
+        print(f"[bootstrap] step 5/6 — pull_prices over {len(codes)} stocks", flush=True)
+        pull_prices.pull_market(codes)
 
-    names = _individual_names()
-    print(f"[bootstrap] step 6/6 — pull_wikidata for {len(names)} names", flush=True)
-    pull_wikidata.pull_batch(names[:500])  # head only on Day-0
+    if from_step <= 6:
+        names = _individual_names()
+        print(f"[bootstrap] step 6/6 — pull_wikidata for {len(names)} names", flush=True)
+        pull_wikidata.pull_batch(names[:500])  # head only on Day-0
 
     print(f"[bootstrap] complete in {time.time()-t0:.0f}s", flush=True)
 
@@ -95,8 +102,15 @@ def _individual_names() -> list[str]:
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Day-0 bootstrap")
     parser.add_argument("--full-history", action="store_true", help="pull all quarter dates")
+    parser.add_argument(
+        "--from-step",
+        type=int,
+        default=1,
+        choices=range(1, 7),
+        help="resume from step N (1-6); earlier steps already produced their output",
+    )
     args = parser.parse_args(argv)
-    run(latest_only=not args.full_history)
+    run(latest_only=not args.full_history, from_step=args.from_step)
     return 0
 
 

@@ -146,13 +146,21 @@ def _upsert(
 
 
 def quarter_ends(start_year: int = 2005, end_year: int | None = None) -> list[str]:
-    """A-share standard reporting dates: 0331/0630/0930/1231 from start_year onward."""
+    """A-share standard reporting dates: 0331/0630/0930/1231 from start_year onward.
+
+    Excludes quarters that haven't ended yet — Eastmoney returns nothing for
+    future report dates and tenacity then burns three retries on each call.
+    """
+    today = date.today()
     if end_year is None:
-        end_year = date.today().year
+        end_year = today.year
     out: list[str] = []
     for y in range(start_year, end_year + 1):
-        for md in ("0331", "0630", "0930", "1231"):
-            out.append(f"{y}{md}")
+        for m, d in ((3, 31), (6, 30), (9, 30), (12, 31)):
+            qd = date(y, m, d)
+            if qd > today:
+                continue
+            out.append(f"{y}{m:02d}{d:02d}")
     return out
 
 
