@@ -3,14 +3,22 @@
 FROM python:3.12-slim AS builder
 WORKDIR /app
 
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_LINK_MODE=copy
+
 # uv is the only build-time tool we need (matches AGENTS.md).
 RUN pip install --no-cache-dir uv==0.4.30
 
 COPY pyproject.toml uv.lock ./
-RUN uv venv /opt/venv && uv sync --frozen --no-dev
+# ETL extras (akshare + pandas) are needed for app.etl.bootstrap inside the
+# container; without them the auto-scheduled jobs can't actually fetch data.
+RUN uv sync --frozen --no-dev --extra etl
 
 COPY app ./app
 COPY scripts ./scripts
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
 FROM python:3.12-slim AS runtime
 WORKDIR /app
@@ -28,4 +36,4 @@ USER whoholds
 
 EXPOSE 8000
 HEALTHCHECK CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health').read()" || exit 1
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["./entrypoint.sh"]

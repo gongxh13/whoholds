@@ -32,10 +32,18 @@ docker compose up -d --build
 
 ### 3. 首次 bootstrap 数据
 
+容器跑起来是空库，要手动触发一次全量抓取：
+
 ```bash
 docker compose exec backend python -m app.etl.bootstrap
-# ~6 小时：teamwork (35min) + ingest + disambiguate + top10/prices/wikidata
+# ≈6 小时：teamwork (35min) + ingest + disambiguate + top10 + prices + wikidata
 ```
+
+之后每天 02:00 / 04:00 / 18:00 由容器内 APScheduler 自动增量。
+
+> ⚠️ bootstrap 需要外网通到 AKShare（data.eastmoney.com）和 Wikidata。
+> design.md §抓取细节 提到 push2his.eastmoney.com 子域被 GFW 截断，
+> 已用腾讯源（`stock_zh_a_hist_tx`）规避。
 
 ### 4. 日常运维
 
